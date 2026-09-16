@@ -8,7 +8,7 @@
 <meta name="color-scheme" content="dark light">
 <link rel="icon" href="/icon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="/apple-touch-icon.png">
-<link rel="stylesheet" href="/style.css?v=20260916a">
+<link rel="stylesheet" href="/style.css?v=20260916b">
 <link rel="manifest" href="/manifest.webmanifest">
 <meta name="theme-color" content="#0a0e1f">
 <link rel="canonical" href="https://afu.tools/antenna-bridge">
@@ -58,9 +58,12 @@
       diese Liste und installiert das gewählte Profil. Ohne Bridge lässt sich das Dokument
       hier ansehen und kopieren.</p>
   </div>
-  <div class="ab-tools">
-    <input id="ab-suche" type="search" placeholder="Funkgerät suchen" style="max-width: 20rem">
-    <span class="field-hint" id="ab-zahl"></span>
+  <div class="filters flach">
+    <div class="field grow">
+      <label for="ab-suche">Suchen</label>
+      <input id="ab-suche" type="search" placeholder="Funkgerät, Kennung oder Buchse" autocomplete="off">
+    </div>
+    <p class="count-line" id="ab-zahl"></p>
   </div>
   <div style="overflow:auto">
     <table class="data" id="ab-tabelle">
