@@ -97,7 +97,7 @@ String statusJson() {
             j += ",\"addr\":" + q(o.host) + ",\"atype\":" + String(o.addrType);
             j += ",\"want\":" + String((int)d.desired) + ",\"state\":" + String((int)d.actual) + ",\"sense\":" + String((int)d.sense);
             j += ",\"batt\":" + String(d.battCv) + ",\"rssi\":" + String((int)d.rssi);
-            j += ",\"lastok\":" + String(d.lastOk ? (millis() - d.lastOk) / 1000 : -1);
+            j += ",\"lastok\":" + String(d.lastOk ? (long)((millis() - d.lastOk) / 1000) : -1L);
             j += ",\"fails\":" + String(d.fails) + ",\"link\":" + String(d.link) + ",\"conn\":\"" + String(d.tries - d.connFails) + "/" + String(d.tries) + "\"";
             j += ",\"err\":" + q(d.err) + ",\"reply\":" + q(d.reply);
             j += ",\"sent\":" + String(engine::lastSent(i));

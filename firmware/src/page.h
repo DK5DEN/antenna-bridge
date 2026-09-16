@@ -25,7 +25,7 @@ nav{display:flex;flex-wrap:wrap;gap:.4rem;padding:.7rem 18px .2rem;position:stic
 nav a{display:inline-flex;align-items:center;height:var(--h);font-size:.88rem;padding:0 .9rem;border-radius:999px;border:1px solid var(--line);text-decoration:none;color:var(--mut)}
 nav a:hover{border-color:var(--acc);color:var(--fg)}nav a.on{background:var(--card-hover);color:var(--fg);border-color:var(--acc)}
 main{width:min(100% - 2rem,1440px);margin:0 auto;padding:14px 0 40px}
-.view{display:none;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:14px}.view.on{display:grid}
+.view{display:none;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:14px}.view.on{display:grid}#v-ant.on{grid-template-columns:repeat(4,minmax(0,1fr))}@media (max-width:1100px){#v-ant.on{grid-template-columns:repeat(2,minmax(0,1fr))}}@media (max-width:640px){#v-ant.on{grid-template-columns:1fr}}
 .card{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:1.1rem 1.2rem;box-shadow:none}.card>*:last-child{margin-bottom:0}
 .card h2{font-size:.8rem;margin:0 0 .8rem;color:var(--mut);text-transform:uppercase;letter-spacing:.07em;font-weight:600;padding-left:.7rem;border-left:3px solid transparent;border-image:linear-gradient(180deg,var(--acc),var(--acc2)) 1}
 .card h3{font-size:.98rem;margin:1rem 0 .4rem;letter-spacing:-.01em}
@@ -47,7 +47,7 @@ th{color:var(--mut);font-weight:600;font-size:.74rem;text-transform:uppercase;le
 code,pre{font:.82rem/1.5 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}code{background:var(--bg2);padding:1px 5px;border-radius:4px;border:1px solid var(--line)}
 pre{background:var(--bg2);border:1px solid var(--line);border-radius:9px;padding:8px 10px;overflow:auto;margin:6px 0}
 #log{background:var(--bg2);border:1px solid var(--line);border-radius:9px;padding:8px;height:160px;overflow:auto;font:.78rem/1.5 ui-monospace,Menlo,Consolas,monospace;white-space:pre-wrap;color:var(--mut)}
-.full{grid-column:1/-1}.tag{font-size:.8rem;color:var(--mut)}.ok{color:var(--ok)}.bad{color:var(--err)}.warnc{color:var(--warn)}p{margin:6px 0}
+.full{grid-column:1/-1}.wide{grid-column:span 2}@media (max-width:760px){.wide{grid-column:auto}}.tag{font-size:.8rem;color:var(--mut)}.ok{color:var(--ok)}.bad{color:var(--err)}.warnc{color:var(--warn)}p{margin:6px 0}
 .grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px 14px}.grid2>div{display:grid;grid-template-rows:1fr var(--h);align-items:end}.grid2 label{margin:0 0 4px;line-height:1.15}.kv{display:grid;grid-template-columns:auto 1fr;gap:2px 14px;font-size:.9rem}.kv span:nth-child(odd){color:var(--mut)}
 .out{border:1px solid var(--line);border-radius:10px;padding:10px 12px;margin:var(--gap) 0;display:flex;gap:12px;align-items:center;flex-wrap:wrap;background:var(--bg2)}.out>div:last-child{display:flex;gap:6px;align-items:center}
 .out .n{font-weight:600;min-width:90px}.out .t{font-size:.7rem;color:var(--mut);text-transform:uppercase;letter-spacing:.06em}.out .st{min-width:60px}
@@ -88,7 +88,7 @@ pre{background:var(--bg2);border:1px solid var(--line);border-radius:9px;padding
 <div class="row"><input id="aname" placeholder="new antenna, e.g. efhw" style="width:150px"><select id="atype" style="width:120px"><option>efhw</option><option>dipole</option><option>vertical</option><option>loop</option><option>beam</option><option>wire</option><option>other</option></select><button class="acc" onclick="cmd('ant add '+v('aname').trim()+' '+v('atype'));$('aname').value=''">Add antenna</button><button onclick="cmd('ant select -')">None active</button></div>
 </section>
 
-<section class="card">
+<section class="card wide">
 <h2>Outputs</h2>
 <div id="outs"></div>
 <p class="tag" id="outtip"></p>
