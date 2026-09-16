@@ -56,6 +56,7 @@ pre{background:var(--bg2);border:1px solid var(--line);border-radius:9px;padding
 .mx{font-size:.86rem}.mx td,.mx th{text-align:center;padding:4px 6px}.mx td.f,.mx th.f{text-align:left;white-space:nowrap}.mx .c{cursor:pointer;border-radius:999px;padding:0 4px;height:var(--hs);min-width:52px;display:inline-flex;align-items:center;justify-content:center;background:var(--bg2);border:1px solid var(--line);color:var(--mut);font-size:.76rem;font-weight:600}.mx .c.on{background:color-mix(in srgb,var(--ok) 15%,transparent);border-color:color-mix(in srgb,var(--ok) 45%,transparent);color:var(--ok)}.mx .c.off{background:color-mix(in srgb,var(--err) 15%,transparent);border-color:color-mix(in srgb,var(--err) 45%,transparent);color:var(--err)}.mx tr.cur td{background:var(--card-hover)}
 #map .bar.off{fill:color-mix(in srgb,var(--err) 55%,transparent);stroke:var(--err)}
 dialog{background:var(--bg2);color:var(--fg);border:1px solid var(--line);border-radius:var(--radius);padding:1.1rem 1.2rem;width:min(92vw,520px);box-shadow:var(--shadow)}dialog::backdrop{background:rgba(5,8,20,.6);backdrop-filter:blur(3px)}dialog h2{font-size:1.05rem;margin:0 0 .8rem;letter-spacing:-.01em}
+#toasts{position:fixed;right:18px;bottom:18px;display:flex;flex-direction:column;gap:8px;z-index:9}.toast{border-left:3px solid var(--acc);background:var(--bg2);border:1px solid var(--line);border-left-width:3px;border-radius:0 8px 8px 0;padding:.6rem .9rem;font-size:.86rem;box-shadow:var(--shadow);max-width:min(420px,90vw);animation:tin .15s ease}.toast.ok{border-left-color:var(--ok)}.toast.bad{border-left-color:var(--err)}@keyframes tin{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
 .chip{display:inline-flex;align-items:center;height:var(--hs);padding:0 .8rem;border-radius:999px;border:1px solid var(--line);background:var(--bg2);cursor:pointer;font-size:.84rem;margin:0;color:var(--mut)}#mapants,#mxants,#rigchips{display:inline-flex;flex-wrap:wrap;gap:6px}.chip:hover{border-color:var(--acc);color:var(--fg)}.chip.on{background:var(--card-hover);color:var(--fg);border-color:var(--acc)}.chip.act{box-shadow:0 0 0 2px color-mix(in srgb,var(--ok) 55%,transparent)}
 #map{width:100%;touch-action:none;user-select:none;display:block}#map text{font:11px "Inter",system-ui,sans-serif;fill:var(--mut)}#map .band{fill:color-mix(in srgb,var(--fg) 4%,transparent)}#map .bandl{fill:var(--mut);font-size:10px}#map .row{fill:color-mix(in srgb,var(--fg) 3%,transparent)}#map .rowl{fill:var(--fg);font-size:12px}
 #map .bar{fill:color-mix(in srgb,var(--acc) 60%,transparent);stroke:var(--acc);stroke-width:1;cursor:grab}#map .bar.inact{fill:color-mix(in srgb,var(--mut) 33%,transparent);stroke:var(--mut)}#map .bar.hit{fill:color-mix(in srgb,var(--ok) 75%,transparent);stroke:var(--ok)}#map .hnd{fill:transparent;cursor:ew-resize}#map .cur{stroke:var(--err);stroke-width:1.5}#map .del{fill:var(--err);font-size:11px;cursor:pointer}
@@ -247,6 +248,7 @@ dialog{background:var(--bg2);color:var(--fg);border:1px solid var(--line);border
 </section>
 </div>
 </main>
+<div id="toasts"></div>
 <script>
 const $=id=>document.getElementById(id);const v=id=>$(id).value;
 const ICO_WEG='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h16"/><path d="M10 11.5v5"/><path d="M14 11.5v5"/><path d="M6 7l.9 11.1A2 2 0 0 0 8.9 20h6.2a2 2 0 0 0 2-1.9L18 7"/><path d="M9.5 7V5.4a1 1 0 0 1 1-1h3a1 1 0 0 1 1 1V7"/></svg>';
@@ -258,13 +260,15 @@ const BANDS=[['160m',1810,2000],['80m',3500,3800],['60m',5351.5,5366.5],['40m',7
 function show(name){document.querySelectorAll('.view').forEach(e=>e.classList.toggle('on',e.id==='v-'+name));document.querySelectorAll('nav a').forEach(a=>a.classList.toggle('on',a.dataset.v===name));}
 window.addEventListener('hashchange',()=>show(location.hash.slice(1)||'ant'));show(location.hash.slice(1)||'ant');
 function log(t){const l=$('log');l.textContent+=t.replace(/\s+$/,'')+"\n";l.scrollTop=l.scrollHeight;}
-async function cmd(line){if(!line)return;log('> '+line);try{const r=await fetch('/api/cmd',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:new URLSearchParams({line})});log(await r.text());}catch(e){log('ERR '+e);}setTimeout(poll,150);}
+function toast(text,kind){const t=document.createElement('div');t.className='toast '+(kind||'');t.textContent=text;$('toasts').appendChild(t);setTimeout(()=>{t.style.opacity='0';t.style.transition='opacity .3s';setTimeout(()=>t.remove(),300);},kind==='bad'?6000:3500);}
+async function cmd(line,quiet){if(!line)return;log('> '+line);let out='';try{const r=await fetch('/api/cmd',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:new URLSearchParams({line})});out=await r.text();log(out);}catch(e){out='ERR '+e;log(out);}
+const last=out.trim().split('\n').pop()||'';if(!quiet&&/^(OK|ERR)/.test(last))toast(last.replace(/^OK ?/,'').replace(/^ERR ?/,'')||(last.startsWith('OK')?'done':'failed'),last.startsWith('OK')?'ok':'bad');setTimeout(poll,150);return out;}
 function esc(s){return String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
 function khz(hz){return hz?(hz/1000).toFixed(1):'–';}
 function fmtUp(s){const d=Math.floor(s/86400),h=Math.floor(s%86400/3600),m=Math.floor(s%3600/60);return (d?d+'d ':'')+h+'h '+m+'m';}
 function otype(){const t=v('otype');$('o-ble').hidden=!(t==='relay'||t==='line');$('o-udp').hidden=t!=='udp';$('o-gpio').hidden=t!=='gpio';$('oatype').value=t==='relay'?'1':'0';}
 function outAdd(){const t=v('otype'),n=v('oname').trim();if(!n){alert('name');return;}let c='out add '+t+' '+n+' ';
-if(t==='relay'||t==='line')c+=v('oaddr').trim()+' '+v('oatype');else if(t==='udp')c+=v('ohost').trim()+' '+v('oport');else c+=v('opin')+' '+v('oinv');cmd(c);}
+if(t==='relay'||t==='line')c+=v('oaddr').trim()+' '+v('oatype');else if(t==='udp')c+=v('ohost').trim()+' '+v('oport');else c+=v('opin')+' '+v('oinv');cmd(c).then(o=>{if(o&&o.startsWith('OK')){$('oname').value='';$('oaddr').value='';}});}
 function useAddr(a,ty,k){$('oaddr').value=a;$('oatype').value=ty;$('otype').value=k===2?'line':'relay';otype();location.hash='#outs';}
 let rulesAnt=null;
 function renderRules(s){if(!rulesAnt||!(rulesAnt==='-'||s.ants.some(a=>a.name===rulesAnt)))rulesAnt=s.active||(s.ants[0]&&s.ants[0].name)||'-';
