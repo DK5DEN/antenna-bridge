@@ -129,7 +129,8 @@ static void printHelp(Print& out) {
     out.println(F("  out del <name>               remove output and its rules"));
     out.println(F("  ant list                     antennas with type, * marks the active one"));
     out.println(F("  ant add <name> [type]        type: efhw, dipole, vertical, loop, beam, wire, other"));
-    out.println(F("  ant type <name> <type> | ant del <name>"));
+    out.println(F("  ant type <name> <type> | ant rename <name> <new> | ant del <name>"));
+    out.println(F("  ant band <name> add <fmin> <fmax>|del <i>|list|clear   ranges usable without a tuner (shown in the UI)"));
     out.println(F("  ant select <name|->          activate an antenna; only its rules and the global ones (-) drive the outputs"));
     out.println(F("  rule list [antenna|-]        rules, optionally only those of one antenna (- = global)"));
     out.println(F("  rule add <antenna|-> <out> <fmin> <fmax> [on|off]   on: output active in the range; off: forced off there (off wins)"));
@@ -320,7 +321,7 @@ static void cmdAnt(String* t, int n, Print& out) {
     if (sub == "list") {
         for (uint8_t i = 0; i < settings.antCount; i++) {
             const Antenna& a = settings.ants[i];
-            out.printf("ant %s%s type=%s outs=", a.name, strcasecmp(a.name, settings.activeAnt) == 0 ? " *" : "", a.type[0] ? a.type : "-");
+            out.printf("ant %s%s type=%s direct=%u outs=", a.name, strcasecmp(a.name, settings.activeAnt) == 0 ? " *" : "", a.type[0] ? a.type : "-", a.bandCount);
             bool first = true;
             for (uint8_t o = 0; o < settings.outCount; o++) {
                 if (!settings.outUsedBy(settings.outs[o].name, a.name)) continue;
@@ -338,6 +339,37 @@ static void cmdAnt(String* t, int n, Print& out) {
         if (!settings.antType(t[2], t[3])) { out.println("ERR unknown antenna"); return; }
         settings.saveAnts();
         out.printf("OK ant %s type=%s\n", t[2].c_str(), t[3].c_str());
+    } else if (sub == "rename" && n >= 4) {
+        if (!settings.antRename(t[2], t[3])) { out.println("ERR unknown antenna or name taken"); return; }
+        settings.saveAnts();
+        settings.saveRules();
+        out.printf("OK ant %s\n", t[3].c_str());
+    } else if (sub == "band" && n >= 4) {
+        String what = t[3]; what.toLowerCase();
+        int ai = settings.antIndex(t[2]);
+        if (ai < 0) { out.println("ERR unknown antenna"); return; }
+        if (what == "list") {
+            const Antenna& a = settings.ants[ai];
+            for (uint8_t b = 0; b < a.bandCount; b++) out.printf("band %u %lu %lu\n", b, (unsigned long)a.bands[b].fmin, (unsigned long)a.bands[b].fmax);
+            out.printf("OK %u direct ranges\n", a.bandCount);
+        } else if (what == "add" && n >= 6) {
+            uint32_t a, b;
+            if (!parseFreq(t[4], a) || !parseFreq(t[5], b)) { out.println("ERR frequencies"); return; }
+            if (!settings.antBandAdd(t[2], a, b)) { out.println("ERR list full (8)"); return; }
+            settings.saveAnts();
+            out.printf("OK band %lu %lu\n", (unsigned long)a, (unsigned long)b);
+        } else if (what == "del" && n >= 5) {
+            long i;
+            if (!parseLong(t[4], i) || !settings.antBandDel(t[2], i)) { out.println("ERR index"); return; }
+            settings.saveAnts();
+            out.println("OK removed");
+        } else if (what == "clear") {
+            settings.ants[ai].bandCount = 0;
+            settings.saveAnts();
+            out.println("OK cleared");
+        } else {
+            out.println("ERR usage: ant band <name> list|add <fmin> <fmax>|del <i>|clear");
+        }
     } else if (sub == "del" && n >= 3) {
         if (!settings.antDel(t[2])) { out.println("ERR not found"); return; }
         settings.saveAnts();
@@ -350,7 +382,7 @@ static void cmdAnt(String* t, int n, Print& out) {
         engine::applyNow();
         out.printf("OK active=%s\n", settings.activeAnt[0] ? settings.activeAnt : "-");
     } else {
-        out.println("ERR usage: ant list | ant add <name> [type] | ant type <name> <type> | ant del <name> | ant select <name|->");
+        out.println("ERR usage: ant list | ant add <name> [type] | ant type <name> <type> | ant rename <name> <new> | ant band <name> list|add <fmin> <fmax>|del <i>|clear | ant del <name> | ant select <name|->");
     }
 }
 

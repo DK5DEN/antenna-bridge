@@ -58,23 +58,34 @@ void Settings::load() {
     antCount = 0;
     len = prefs.getBytesLength("ants");
     uint8_t av = prefs.getUChar("av", 1);   // layout version of the ants blob
-    if (av < 2 && len > 0 && len % sizeof(Antenna) == 0 && len <= sizeof(ants)) {
+    if (av < 2 && len > 0 && len % 32 == 0 && len <= ANT_MAX * 32) {
         // blob written by the first build of the new layout, before the version key existed:
         // accept it when every record looks like text
         uint8_t buf[sizeof(ants)];
         prefs.getBytes("ants", buf, len);
         bool text = true;
         for (size_t i = 0; i < len && text; i++) {
-            size_t off = i % sizeof(Antenna);
+            size_t off = i % 32;
             uint8_t c = buf[i];
             if (off < 28 && c != 0 && (c < 0x20 || c > 0x7e)) text = false;
         }
         if (text) av = 2;
     }
-    if (av >= 2 && len > 0 && len % sizeof(Antenna) == 0 && len <= sizeof(ants)) {
+    if (av >= 3 && len > 0 && len % sizeof(Antenna) == 0 && len <= sizeof(ants)) {
         prefs.getBytes("ants", ants, len);
         antCount = len / sizeof(Antenna);
-    } else if (len > 0 && len % 24 == 0 && len / 24 <= ANT_MAX) {
+    } else if (av == 2 && len > 0 && len % 32 == 0 && len / 32 <= ANT_MAX) {
+        // version 2: name[16] + type[12] + 4 reserved, no bands
+        uint8_t buf[ANT_MAX * 32];
+        prefs.getBytes("ants", buf, len);
+        antCount = len / 32;
+        for (uint8_t i = 0; i < antCount; i++) {
+            memset(&ants[i], 0, sizeof(Antenna));
+            memcpy(ants[i].name, buf + i * 32, 16);
+            memcpy(ants[i].type, buf + i * 32 + 16, 12);
+        }
+        migrated = true;
+    } else if (av < 2 && len > 0 && len % 24 == 0 && len / 24 <= ANT_MAX) {
         // old layout: name[16] + 8 reserved bytes
         uint8_t buf[ANT_MAX * 24];
         prefs.getBytes("ants", buf, len);
@@ -162,7 +173,7 @@ void Settings::saveAnts() {
     prefs.begin(NS, false);
     if (antCount == 0) prefs.remove("ants");
     else prefs.putBytes("ants", ants, antCount * sizeof(Antenna));
-    prefs.putUChar("av", 2);
+    prefs.putUChar("av", 3);
     prefs.putString("active", activeAnt);
     prefs.end();
 }
@@ -310,6 +321,52 @@ bool Settings::antDel(const String& name) {
     ruleCount = w;
     if (name.equalsIgnoreCase(activeAnt)) activeAnt[0] = 0;
     return true;
+}
+
+bool Settings::antRename(const String& name, const String& newName) {
+    int i = antIndex(name);
+    if (i < 0 || newName.length() == 0 || newName.length() >= sizeof(ants[0].name) || newName == "-") return false;
+    int other = antIndex(newName);
+    if (other >= 0 && other != i) return false;
+    for (uint8_t r = 0; r < ruleCount; r++)
+        if (name.equalsIgnoreCase(rules[r].ant)) strlcpy(rules[r].ant, newName.c_str(), sizeof(rules[r].ant));
+    if (name.equalsIgnoreCase(activeAnt)) strlcpy(activeAnt, newName.c_str(), sizeof(activeAnt));
+    strlcpy(ants[i].name, newName.c_str(), sizeof(ants[i].name));
+    return true;
+}
+
+bool Settings::antBandAdd(const String& name, uint32_t fmin, uint32_t fmax) {
+    int i = antIndex(name);
+    if (i < 0) return false;
+    Antenna& a = ants[i];
+    if (fmin > fmax) { uint32_t t = fmin; fmin = fmax; fmax = t; }
+    for (uint8_t b = 0; b < a.bandCount; b++)
+        if (a.bands[b].fmin == fmin && a.bands[b].fmax == fmax) return true;
+    if (a.bandCount >= 8) return false;
+    a.bands[a.bandCount++] = { fmin, fmax };
+    // keep them sorted, the UI lists them in that order
+    for (uint8_t x = 1; x < a.bandCount; x++) {
+        Band key = a.bands[x]; int y = x - 1;
+        while (y >= 0 && a.bands[y].fmin > key.fmin) { a.bands[y + 1] = a.bands[y]; y--; }
+        a.bands[y + 1] = key;
+    }
+    return true;
+}
+
+bool Settings::antBandDel(const String& name, uint8_t idx) {
+    int i = antIndex(name);
+    if (i < 0 || idx >= ants[i].bandCount) return false;
+    Antenna& a = ants[i];
+    for (uint8_t b = idx; b + 1 < a.bandCount; b++) a.bands[b] = a.bands[b + 1];
+    a.bandCount--;
+    return true;
+}
+
+int Settings::antDirect(const Antenna& a, uint32_t hz) const {
+    if (a.bandCount == 0) return -1;
+    for (uint8_t b = 0; b < a.bandCount; b++)
+        if (hz >= a.bands[b].fmin && hz <= a.bands[b].fmax) return 1;
+    return 0;
 }
 
 bool Settings::antSelect(const String& name) {

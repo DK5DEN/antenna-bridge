@@ -27,10 +27,17 @@ struct Output {
 // An antenna is a set of rules. Only the rules of the active antenna and
 // the global rules (antenna "-") drive the outputs; an output may appear in
 // the rules of several antennas.
+struct Band {
+    uint32_t fmin;
+    uint32_t fmax;
+};
+
 struct Antenna {
     char name[16];
     char type[12];      // efhw, dipole, vertical, loop, beam, wire, other ... informational
-    uint8_t reserved[4];
+    uint8_t bandCount;  // ranges the antenna works on without a tuner (informational, shown in the UI)
+    uint8_t reserved[3];
+    Band bands[8];
 };
 
 struct Rule {
@@ -90,6 +97,10 @@ struct Settings {
     bool antAdd(const String& name, const String& type);
     bool antType(const String& name, const String& type);
     bool antDel(const String& name);            // its rules go with it
+    bool antRename(const String& name, const String& newName);   // rules and the active selection follow
+    bool antBandAdd(const String& name, uint32_t fmin, uint32_t fmax);
+    bool antBandDel(const String& name, uint8_t i);
+    int  antDirect(const Antenna& a, uint32_t hz) const;   // 1 inside a direct range, 0 outside, -1 no ranges given
     bool antSelect(const String& name);         // empty string deselects
 
     bool wifiAdd(const String& ssid, const String& pass);

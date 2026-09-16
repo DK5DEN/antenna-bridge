@@ -19,7 +19,9 @@ hard-wired to a specific antenna or rig:
   the global rules drive the outputs, so the loop controller and the wire
   antenna relays never act together. An output may appear in the rules of
   several antennas with different ranges. Antennas carry a type (efhw,
-  dipole, vertical, loop, beam, wire, other) for the overview.
+  dipole, vertical, loop, beam, wire, other) and optionally the ranges they
+  work on without a tuner (`ant band`), which the signal flow and the map
+  show ("direct, no tuner" / "needs a tuner here").
 - **Rig profiles** describe how to talk to a radio: protocol family (line
   based ASCII as Yaesu, Kenwood and Elecraft use it, or Icom CI-V), baud
   rate, which answers carry the frequency, and the wiring of the jack. Seven
@@ -196,7 +198,7 @@ list.
 | `freq <hz>` | manual frequency, used until the rig reports a change |
 | `apply` | re-apply the current frequency to all outputs |
 | `rig` / `rig list` / `rig set <id>` / `rig show [id]` / `rig import <json>` / `rig del <id>` | rig profiles |
-| `ant list` / `ant add <name> [type]` / `ant type <name> <type>` / `ant del <name>` / `ant select <name\|->` | antennas |
+| `ant list` / `ant add <name> [type]` / `ant type <name> <type>` / `ant rename <name> <new>` / `ant band <name> add <fmin> <fmax>\|del <i>\|list\|clear` / `ant del <name>` / `ant select <name\|->` | antennas, direct ranges without a tuner |
 | `out list` / `out add …` / `out del <name>` | outputs, see above |
 | `rule list [antenna\|-]` / `rule add <antenna\|-> <out> <fmin> <fmax> [on\|off]` / `rule set <i> <fmin> <fmax> [on\|off]` / `rule del <i>` / `rule clear` | rules, `-` = global, OFF wins |
 | `ble scan` / `ble list` | scan for BR1 relays and UART targets |
@@ -226,8 +228,10 @@ Settings (persisted in NVS):
 Port 80, single page (`firmware/src/page.h`): frequency and CAT state,
 antennas with type and activate button, outputs with live state (relay
 state, link, battery voltage, RSSI, last reply, which antennas use them),
-the signal flow, the frequency map, the switching matrix, output setup with
-Bluetooth scan and one-click add, rules per antenna with band presets, rig profiles with wiring notes, import,
+the signal flow (rig node opens the rig chooser, antenna nodes activate),
+antenna editor (name, type, direct ranges), the frequency map, the switching
+matrix, output setup with Bluetooth scan and one-click add, rules per
+antenna with band presets, rig profiles with wiring notes, import,
 export and the afu.tools catalog, settings, WiFi, help and console. Extra
 endpoints: `GET /api/rig?id=…` and `POST /api/rig` for profile documents. HTTP API: `GET /api/status`, `POST /api/cmd` (`line`),
 `POST /api/wifi`, `GET /api/scan`.
