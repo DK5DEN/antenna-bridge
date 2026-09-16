@@ -15,10 +15,11 @@ through a small rule table:
 Everything is configured at runtime (console, UDP, web UI), nothing is
 hard-wired to a specific antenna or rig:
 
-- **Antennas** group outputs. One antenna is active; its outputs and the
-  unassigned ones follow the rules, outputs of the other antennas are
-  treated as off. The loop controller and the wire antenna relays never act
-  together.
+- **Antennas** are sets of rules. One antenna is active; only its rules and
+  the global rules drive the outputs, so the loop controller and the wire
+  antenna relays never act together. An output may appear in the rules of
+  several antennas with different ranges. Antennas carry a type (efhw,
+  dipole, vertical, loop, beam, wire, other) for the overview.
 - **Rig presets** set the CAT protocol family (Yaesu ASCII, Kenwood/Elecraft
   ASCII, Icom CI-V binary), baud rate and CI-V address, and carry the wiring
   notes for the jack. Pins and levels are settings, so the same board works
@@ -101,31 +102,32 @@ Rig, antennas, outputs and rules, on the console, by UDP or in the web UI:
 ```
 rig set ftx1                          # protocol, baud rate, wiring notes
 
-ant add efhw                          # wire antenna with the BR1 switches
-ant add loop                          # magnetic loop with magloop-tune
+ant add efhw efhw                     # wire antenna with the BR1 switches
+ant add loop loop                     # magnetic loop with magloop-tune
 
 ble scan                              # 6 s, then:
 ble list                              # ble d1:e2:...  atype=1 rssi=-60 kind=relay name=BR1
 out add relay coil80 d1:e2:f3:a4:b5:c6  # BR1 relay, address from the scan
-out assign coil80 efhw
-rule add coil80 3500k 3800k           # relay on between 3.5 and 3.8 MHz, off elsewhere
+rule add efhw coil80 3500k 3800k      # on the efhw: relay on between 3.5 and 3.8 MHz, off elsewhere
 
 out add udp loopctl magloop.local 4210  # magloop-tune over WiFi
-out assign loopctl loop
-rule add loopctl 6.9M 7.3M            # gets "freq <hz>" on 40 m
+rule add loop loopctl 6.9M 7.3M       # on the loop: gets "freq <hz>" on 40 m
 
 out add line loop-bt 34:85:18:aa:bb:cc  # magloop-tune over Bluetooth (kind=line in the scan)
-out assign loop-bt loop
-rule add loop-bt 6.9M 7.3M
+rule add loop loop-bt 6.9M 7.3M
 
-out add gpio lpf20 5                  # unassigned: follows its rule with every antenna
-rule add lpf20 14000k 14350k
+out add gpio coax 5                   # coax relay selecting the loop feed line
+rule add loop coax 0 999M             # on whenever the loop is the active antenna
 
-ant select efhw                       # switch antennas; loop outputs are now treated as off
+out add gpio lpf20 6
+rule add - lpf20 14000k 14350k        # global rule: with every antenna
+
+ant select efhw                       # switch antennas; loop rules are now inactive
 ```
 
-An output with a rule `0 999M` on an antenna is on exactly while that
-antenna is active — a coax relay that selects the antenna, for example.
+The web UI has a frequency map for this: outputs as rows, rules as bars on
+a logarithmic axis with the amateur bands shaded; drag bars or their edges
+(`rule set`), click into a band to add a rule, ✕ removes one.
 
 Several rules per output are allowed. Relay and GPIO outputs are switched
 on when any of their rules covers the frequency and off otherwise. UDP and
@@ -156,9 +158,9 @@ list.
 | `freq <hz>` | manual frequency, used until the rig reports a change |
 | `apply` | re-apply the current frequency to all outputs |
 | `rig` / `rig list` / `rig set <preset>` | rig preset and wiring notes |
-| `ant list` / `ant add <name>` / `ant del <name>` / `ant select <name\|->` | antennas |
-| `out list` / `out add …` / `out del <name>` / `out assign <name> <antenna\|->` | outputs, see above |
-| `rule list` / `rule add <out> <fmin> <fmax>` / `rule del <i>` / `rule clear` | rules |
+| `ant list` / `ant add <name> [type]` / `ant type <name> <type>` / `ant del <name>` / `ant select <name\|->` | antennas |
+| `out list` / `out add …` / `out del <name>` | outputs, see above |
+| `rule list [antenna\|-]` / `rule add <antenna\|-> <out> <fmin> <fmax>` / `rule set <i> <fmin> <fmax>` / `rule del <i>` / `rule clear` | rules, `-` = global |
 | `ble scan` / `ble list` | scan for BR1 relays and UART targets |
 | `ble on\|off <name>` / `ble refresh <name>` / `ble send <name> <text>` | manual Bluetooth operations |
 | `cat` / `cat FA;` / `cat 03` | CAT link status, raw CAT command (hex bytes for CI-V) |
@@ -185,10 +187,11 @@ Settings (persisted in NVS):
 ## Web UI and WiFi
 
 Port 80, single page (`firmware/src/page.h`): frequency and CAT state,
-antennas with activate button and outputs grouped by antenna (live state:
-relay state, battery voltage, RSSI, last reply; assignment dropdown),
-output setup with Bluetooth scan and one-click add, rules with band
-presets, rig preset with wiring notes, settings, WiFi, help and console. HTTP API: `GET /api/status`, `POST /api/cmd` (`line`),
+antennas with type and activate button, outputs with live state (relay
+state, link, battery voltage, RSSI, last reply, which antennas use them),
+the frequency map, output setup with Bluetooth scan and one-click add,
+rules per antenna with band presets, rig preset with wiring notes,
+settings, WiFi, help and console. HTTP API: `GET /api/status`, `POST /api/cmd` (`line`),
 `POST /api/wifi`, `GET /api/scan`.
 
 WiFi behaviour is the same as magloop-tune: up to five stored networks,

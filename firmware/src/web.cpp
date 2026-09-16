@@ -55,7 +55,7 @@ String statusJson() {
     j += ",\"blebusy\":" + String(ble::busy() ? "true" : "false");
     j += ",\"active\":" + q(s.activeAnt);
     j += ",\"ants\":[";
-    for (uint8_t i = 0; i < s.antCount; i++) { if (i) j += ","; j += q(s.ants[i].name); }
+    for (uint8_t i = 0; i < s.antCount; i++) { if (i) j += ","; j += "{\"name\":" + q(s.ants[i].name) + ",\"type\":" + q(s.ants[i].type) + "}"; }
     j += "]";
 
     j += ",\"cat\":{\"ok\":" + String(cat::linkOk() ? "true" : "false");
@@ -71,9 +71,17 @@ String statusJson() {
     for (uint8_t i = 0; i < s.outCount; i++) {
         const Output& o = s.outs[i];
         if (i) j += ",";
-        bool match = f && s.outActive(o) && s.ruleMatch(o.name, f);
+        bool match = f && s.ruleMatch(o.name, f);
         j += "{\"name\":" + q(o.name) + ",\"type\":" + q(outTypeName(o.type)) + ",\"match\":" + String(match ? "true" : "false");
-        j += ",\"antenna\":" + q(o.antenna) + ",\"active\":" + String(s.outActive(o) ? "true" : "false");
+        j += ",\"used\":[";
+        bool first = true;
+        for (uint8_t a = 0; a < s.antCount; a++) {
+            if (!s.outUsedBy(o.name, s.ants[a].name)) continue;
+            j += (first ? "" : ",") + q(s.ants[a].name);
+            first = false;
+        }
+        if (s.outUsedBy(o.name, "")) { j += (first ? "" : ",") + String("\"-\""); }
+        j += "]";
         if (o.type == OUT_UDP) {
             j += ",\"host\":" + q(o.host) + ",\"port\":" + String(o.port);
             j += ",\"sent\":" + String(engine::lastSent(i)) + ",\"reply\":" + q(engine::lastUdpReply(i)) + ",\"err\":" + q(engine::udpError(i));
@@ -96,7 +104,7 @@ String statusJson() {
     j += ",\"rules\":[";
     for (uint8_t i = 0; i < s.ruleCount; i++) {
         if (i) j += ",";
-        j += "{\"out\":" + q(s.rules[i].out) + ",\"fmin\":" + String(s.rules[i].fmin) + ",\"fmax\":" + String(s.rules[i].fmax) + "}";
+        j += "{\"ant\":" + q(s.rules[i].ant) + ",\"out\":" + q(s.rules[i].out) + ",\"fmin\":" + String(s.rules[i].fmin) + ",\"fmax\":" + String(s.rules[i].fmax) + ",\"active\":" + String(s.ruleActive(s.rules[i]) ? "true" : "false") + "}";
     }
     j += "]";
 

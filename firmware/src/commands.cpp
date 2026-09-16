@@ -83,8 +83,16 @@ void printOutputs(Print& out) {
     uint32_t f = engine::freq();
     for (uint8_t i = 0; i < settings.outCount; i++) {
         const Output& o = settings.outs[i];
-        bool match = f && settings.outActive(o) && settings.ruleMatch(o.name, f);
-        out.printf("out %s type=%s ant=%s active=%d ", o.name, outTypeName(o.type), o.antenna[0] ? o.antenna : "-", settings.outActive(o) ? 1 : 0);
+        bool match = f && settings.ruleMatch(o.name, f);
+        out.printf("out %s type=%s ants=", o.name, outTypeName(o.type));
+        bool first = true;
+        for (uint8_t a = 0; a < settings.antCount; a++) {
+            if (!settings.outUsedBy(o.name, settings.ants[a].name)) continue;
+            out.printf("%s%s", first ? "" : ",", settings.ants[a].name);
+            first = false;
+        }
+        if (settings.outUsedBy(o.name, "")) { out.printf("%s*", first ? "" : ","); first = false; }
+        out.printf("%s ", first ? "-" : "");
         if (o.type == OUT_UDP) {
             out.printf("host=%s port=%u sent=%lu reply=\"%s\" err=%s\n", o.host, o.port,
                        (unsigned long)engine::lastSent(i), engine::lastUdpReply(i).c_str(),
@@ -118,13 +126,13 @@ static void printHelp(Print& out) {
     out.println(F("  out add line <name> <addr> [atype]      bluetooth uart target, gets 'freq <hz>'"));
     out.println(F("  out add gpio <name> <pin> [inv]         local pin, high inside its rules"));
     out.println(F("  out del <name>               remove output and its rules"));
-    out.println(F("  out assign <name> <antenna|-> attach output to an antenna (- detaches)"));
-    out.println(F("  ant list                     antennas, * marks the active one"));
-    out.println(F("  ant add <name> | ant del <name>"));
-    out.println(F("  ant select <name|->          activate an antenna; outputs of the others are treated as off"));
-    out.println(F("  rule list                    rules"));
-    out.println(F("  rule add <out> <fmin> <fmax> output is active between fmin and fmax"));
-    out.println(F("  rule del <i> | rule clear"));
+    out.println(F("  ant list                     antennas with type, * marks the active one"));
+    out.println(F("  ant add <name> [type]        type: efhw, dipole, vertical, loop, beam, wire, other"));
+    out.println(F("  ant type <name> <type> | ant del <name>"));
+    out.println(F("  ant select <name|->          activate an antenna; only its rules and the global ones (-) drive the outputs"));
+    out.println(F("  rule list [antenna|-]        rules, optionally only those of one antenna (- = global)"));
+    out.println(F("  rule add <antenna|-> <out> <fmin> <fmax>   output is on between fmin and fmax while that antenna is active"));
+    out.println(F("  rule set <i> <fmin> <fmax> | rule del <i> | rule clear"));
     out.println(F("  ble scan                     scan 6 s for BR1 relays and uart targets"));
     out.println(F("  ble list                     last scan result"));
     out.println(F("  ble on|off <name>            switch a relay by hand"));
@@ -175,16 +183,8 @@ static void cmdOut(String* t, int n, Print& out) {
         out.println("OK removed");
         return;
     }
-    if (sub == "assign" && n >= 4) {
-        if (!settings.outAssign(t[2], t[3])) { out.println("ERR unknown output or antenna"); return; }
-        settings.saveOuts();
-        engine::applyNow();
-        const Output& o = settings.outs[settings.outIndex(t[2])];
-        out.printf("OK out %s antenna=%s\n", o.name, o.antenna[0] ? o.antenna : "-");
-        return;
-    }
     if (sub != "add" || n < 5) {
-        out.println("ERR usage: out list | out del <name> | out assign <name> <antenna|-> | out add udp <name> <host> <port> | out add relay|line <name> <addr> [atype] | out add gpio <name> <pin> [inv]");
+        out.println("ERR usage: out list | out del <name> | out add udp <name> <host> <port> | out add relay|line <name> <addr> [atype] | out add gpio <name> <pin> [inv]");
         return;
     }
     Output o;
@@ -222,17 +222,37 @@ static void cmdRule(String* t, int n, Print& out) {
     String sub = n > 1 ? t[1] : "list";
     sub.toLowerCase();
     if (sub == "list") {
-        for (uint8_t i = 0; i < settings.ruleCount; i++)
-            out.printf("rule %u %s %lu %lu\n", i, settings.rules[i].out, (unsigned long)settings.rules[i].fmin, (unsigned long)settings.rules[i].fmax);
-        out.printf("OK %u rules\n", settings.ruleCount);
-    } else if (sub == "add" && n >= 5) {
+        String filt = n > 2 ? t[2] : "";
+        uint8_t shown = 0;
+        for (uint8_t i = 0; i < settings.ruleCount; i++) {
+            const Rule& r = settings.rules[i];
+            const char* ant = r.ant[0] ? r.ant : "-";
+            if (filt.length() && !filt.equalsIgnoreCase(ant)) continue;
+            out.printf("rule %u %s %s %lu %lu%s\n", i, ant, r.out, (unsigned long)r.fmin, (unsigned long)r.fmax,
+                       settings.ruleActive(r) ? "" : " (inactive)");
+            shown++;
+        }
+        out.printf("OK %u rules\n", shown);
+    } else if (sub == "add" && n >= 6) {
         uint32_t a, b;
-        if (!parseFreq(t[3], a) || !parseFreq(t[4], b)) { out.println("ERR frequencies"); return; }
-        if (settings.outIndex(t[2]) < 0) { out.println("ERR unknown output"); return; }
-        if (!settings.ruleAdd(t[2], a, b)) { out.println("ERR list full (32)"); return; }
+        if (!parseFreq(t[4], a) || !parseFreq(t[5], b)) { out.println("ERR frequencies"); return; }
+        if (settings.outIndex(t[3]) < 0) { out.println("ERR unknown output"); return; }
+        if (t[2] != "-" && settings.antIndex(t[2]) < 0) { out.println("ERR unknown antenna"); return; }
+        if (!settings.ruleAdd(t[2], t[3], a, b)) { out.println("ERR list full (32)"); return; }
         settings.saveRules();
         engine::applyNow();
-        out.printf("OK rule %u %s %lu %lu\n", settings.ruleCount - 1, settings.rules[settings.ruleCount - 1].out, (unsigned long)a, (unsigned long)b);
+        const Rule& r = settings.rules[settings.ruleCount - 1];
+        out.printf("OK rule %u %s %s %lu %lu\n", settings.ruleCount - 1, r.ant[0] ? r.ant : "-", r.out, (unsigned long)a, (unsigned long)b);
+    } else if (sub == "set" && n >= 5) {
+        long i; uint32_t a, b;
+        if (!parseLong(t[2], i) || i < 0 || i >= settings.ruleCount) { out.println("ERR index"); return; }
+        if (!parseFreq(t[3], a) || !parseFreq(t[4], b)) { out.println("ERR frequencies"); return; }
+        if (a > b) { uint32_t x = a; a = b; b = x; }
+        settings.rules[i].fmin = a;
+        settings.rules[i].fmax = b;
+        settings.saveRules();
+        engine::applyNow();
+        out.printf("OK rule %ld %s %s %lu %lu\n", i, settings.rules[i].ant[0] ? settings.rules[i].ant : "-", settings.rules[i].out, (unsigned long)a, (unsigned long)b);
     } else if (sub == "del" && n >= 3) {
         long i;
         if (!parseLong(t[2], i) || !settings.ruleDel(i)) { out.println("ERR index"); return; }
@@ -245,7 +265,7 @@ static void cmdRule(String* t, int n, Print& out) {
         engine::applyNow();
         out.println("OK rules cleared");
     } else {
-        out.println("ERR usage: rule list | rule add <out> <fmin> <fmax> | rule del <i> | rule clear");
+        out.println("ERR usage: rule list [antenna|-] | rule add <antenna|-> <out> <fmin> <fmax> | rule set <i> <fmin> <fmax> | rule del <i> | rule clear");
     }
 }
 
@@ -293,10 +313,11 @@ static void cmdAnt(String* t, int n, Print& out) {
     sub.toLowerCase();
     if (sub == "list") {
         for (uint8_t i = 0; i < settings.antCount; i++) {
-            out.printf("ant %s%s outs=", settings.ants[i].name, strcasecmp(settings.ants[i].name, settings.activeAnt) == 0 ? " *" : "");
+            const Antenna& a = settings.ants[i];
+            out.printf("ant %s%s type=%s outs=", a.name, strcasecmp(a.name, settings.activeAnt) == 0 ? " *" : "", a.type[0] ? a.type : "-");
             bool first = true;
             for (uint8_t o = 0; o < settings.outCount; o++) {
-                if (strcasecmp(settings.outs[o].antenna, settings.ants[i].name) != 0) continue;
+                if (!settings.outUsedBy(settings.outs[o].name, a.name)) continue;
                 out.printf("%s%s", first ? "" : ",", settings.outs[o].name);
                 first = false;
             }
@@ -304,22 +325,26 @@ static void cmdAnt(String* t, int n, Print& out) {
         }
         out.printf("OK %u antennas, active=%s\n", settings.antCount, settings.activeAnt[0] ? settings.activeAnt : "-");
     } else if (sub == "add" && n >= 3) {
-        if (!settings.antAdd(t[2])) { out.println("ERR name 1..15 chars or list full (8)"); return; }
+        if (!settings.antAdd(t[2], n > 3 ? t[3] : "")) { out.println("ERR name 1..15 chars or list full (8)"); return; }
         settings.saveAnts();
         out.printf("OK ant %s\n", t[2].c_str());
+    } else if (sub == "type" && n >= 4) {
+        if (!settings.antType(t[2], t[3])) { out.println("ERR unknown antenna"); return; }
+        settings.saveAnts();
+        out.printf("OK ant %s type=%s\n", t[2].c_str(), t[3].c_str());
     } else if (sub == "del" && n >= 3) {
         if (!settings.antDel(t[2])) { out.println("ERR not found"); return; }
         settings.saveAnts();
-        settings.saveOuts();
+        settings.saveRules();
         engine::applyNow();
-        out.println("OK removed");
+        out.println("OK removed, its rules too");
     } else if (sub == "select" && n >= 3) {
         if (!settings.antSelect(t[2])) { out.println("ERR unknown antenna"); return; }
         settings.saveAnts();
         engine::applyNow();
         out.printf("OK active=%s\n", settings.activeAnt[0] ? settings.activeAnt : "-");
     } else {
-        out.println("ERR usage: ant list | ant add <name> | ant del <name> | ant select <name|->");
+        out.println("ERR usage: ant list | ant add <name> [type] | ant type <name> <type> | ant del <name> | ant select <name|->");
     }
 }
 

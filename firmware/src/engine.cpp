@@ -101,7 +101,7 @@ void apply(uint32_t hz) {
     retryNeeded = false;
     for (uint8_t i = 0; i < settings.outCount; i++) {
         const Output& o = settings.outs[i];
-        bool match = settings.outActive(o) && settings.ruleMatch(o.name, hz);
+        bool match = settings.ruleMatch(o.name, hz);
         switch (o.type) {
             case OUT_RELAY:
                 ble::setDesired(i, match);

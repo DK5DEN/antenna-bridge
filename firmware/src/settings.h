@@ -20,21 +20,24 @@ struct Output {
     uint8_t  addrType;      // ble: 0 public, 1 random
     uint8_t  pin;           // gpio
     uint8_t  invert;        // gpio: 1 = active low
-    char     antenna[16];   // antenna this output belongs to, empty = always active
+    char     legacyAnt[16]; // former per-output antenna, only read for migration
     uint8_t  reserved[5];
 };
 
-// An antenna groups outputs. Only the outputs of the active antenna (and
-// unassigned outputs) follow their rules; the others are treated as off.
+// An antenna is a set of rules. Only the rules of the active antenna and
+// the global rules (antenna "-") drive the outputs; an output may appear in
+// the rules of several antennas.
 struct Antenna {
     char name[16];
-    uint8_t reserved[8];
+    char type[12];      // efhw, dipole, vertical, loop, beam, wire, other ... informational
+    uint8_t reserved[4];
 };
 
 struct Rule {
     char     out[16];       // output name
     uint32_t fmin;          // Hz, inclusive
     uint32_t fmax;          // Hz, inclusive
+    char     ant[16];       // antenna this rule belongs to, empty = global (every antenna)
 };
 
 // CAT protocol family. Presets in cat.cpp map rig names onto these.
@@ -80,17 +83,18 @@ struct Settings {
     int  outIndex(const String& name) const;
     bool outAdd(const Output& o);           // add, or replace an output with the same name
     bool outDel(const String& name);        // removes the output and its rules
-    bool ruleAdd(const String& out, uint32_t fmin, uint32_t fmax);
+    bool ruleAdd(const String& ant, const String& out, uint32_t fmin, uint32_t fmax);   // ant "-" = global
     bool ruleDel(uint8_t i);
     void ruleClear() { ruleCount = 0; }
-    bool ruleMatch(const char* out, uint32_t hz) const;
+    bool ruleMatch(const char* out, uint32_t hz) const;     // active antenna or global rules only
+    bool ruleActive(const Rule& r) const;                    // rule belongs to the active antenna or is global
+    bool outUsedBy(const char* out, const char* ant) const;  // any rule of that antenna names the output
 
     int  antIndex(const String& name) const;
-    bool antAdd(const String& name);
-    bool antDel(const String& name);            // outputs of it become unassigned
+    bool antAdd(const String& name, const String& type);
+    bool antType(const String& name, const String& type);
+    bool antDel(const String& name);            // its rules go with it
     bool antSelect(const String& name);         // empty string deselects
-    bool outAssign(const String& out, const String& ant);   // ant "-" or empty clears
-    bool outActive(const Output& o) const;      // unassigned or belongs to the active antenna
 
     bool wifiAdd(const String& ssid, const String& pass);
     bool wifiDel(const String& ssid);
