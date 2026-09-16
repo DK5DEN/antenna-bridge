@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Antenna Bridge: Rig-Profile | afu.tools</title>
+<meta name="description" content="CAT-Profile für die Antenna Bridge: welches Funkgerät wie angeschlossen wird und wie es die Frequenz meldet. Katalog durchsuchen, eigene Profile teilen.">
+<meta name="color-scheme" content="dark light">
+<link rel="icon" href="/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
+<link rel="stylesheet" href="/style.css?v=20260916a">
+<link rel="manifest" href="/manifest.webmanifest">
+<meta name="theme-color" content="#0a0e1f">
+<link rel="canonical" href="https://afu.tools/antenna-bridge">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="afu.tools">
+<meta property="og:locale" content="de_DE">
+<meta property="og:title" content="Antenna Bridge: Rig-Profile">
+<meta property="og:description" content="CAT-Profile für die Antenna Bridge: Katalog durchsuchen, eigene Profile teilen.">
+<meta property="og:url" content="https://afu.tools/antenna-bridge">
+<meta property="og:image" content="https://afu.tools/og.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="afu.tools, Werkzeuge und Wissen für den Amateurfunk">
+<meta name="twitter:card" content="summary_large_image">
+<style>
+.ab-grid { display: grid; gap: 0.7rem 0.9rem; grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr)); }
+.ab-grid .field.breit { grid-column: 1 / -1; }
+.ab-json { width: 100%; min-height: 12rem; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 0.85rem; }
+.ab-detail pre { white-space: pre-wrap; font-size: 0.82rem; }
+.ab-detail dl { display: grid; grid-template-columns: max-content 1fr; gap: 0.25rem 1rem; }
+.ab-detail dt { color: var(--muted); }
+.ab-tools { display: flex; gap: 0.5rem; flex-wrap: wrap; align-items: center; margin: 0.6rem 0; }
+.ab-fam { display: none; }
+.ab-fam.an { display: contents; }
+</style>
+</head>
+<body>
+<a class="skip" href="#inhalt">Zum Inhalt</a>
+<!--#include virtual="/_topbar.html" -->
+
+<main id="inhalt">
+<div class="wrap weit page-head einspaltig">
+  <p class="crumbs"><a href="/">Start</a> › Antenna Bridge</p>
+  <h1>Antenna Bridge: Rig-Profile</h1>
+  <p class="lead">Die <a href="https://github.com/DK5DEN/antenna-bridge">Antenna Bridge</a> ist ein
+    ESP32 am Funkgerät: sie liest die Frequenz per CAT und schaltet danach Antennen,
+    Relais und Loop-Steuerungen. Ein Rig-Profil sagt ihr, wie sie mit einem bestimmten
+    Funkgerät spricht und wie die Buchse verdrahtet wird. Hier stehen die Profile, die
+    andere schon ausprobiert haben; eigene lassen sich einreichen und nach der Freigabe
+    von jeder Bridge mit einem Klick installieren.</p>
+</div>
+
+<section class="wrap weit section">
+  <div class="abschnitt-kopf">
+    <h2>Katalog</h2>
+    <p class="section-intro">In der Bridge: Settings → Rig → „Catalog from afu.tools" holt
+      diese Liste und installiert das gewählte Profil. Ohne Bridge lässt sich das Dokument
+      hier ansehen und kopieren.</p>
+  </div>
+  <div class="ab-tools">
+    <input id="ab-suche" type="search" placeholder="Funkgerät suchen" style="max-width: 20rem">
+    <span class="field-hint" id="ab-zahl"></span>
+  </div>
+  <div style="overflow:auto">
+    <table class="data" id="ab-tabelle">
+      <thead><tr><th>Profil</th><th>Familie</th><th class="num">Baud</th><th>von</th><th>Version</th><th></th></tr></thead>
+      <tbody id="ab-zeilen"><tr><td colspan="6" class="empty">wird geladen …</td></tr></tbody>
+    </table>
+  </div>
+  <p class="field-hint"><span class="badge busy">wartet</span> steht nur bei deinen eigenen Einreichungen,
+    die noch nicht freigegeben sind.</p>
+</section>
+
+<section class="wrap weit section ab-detail" id="ab-detail" hidden>
+  <div class="abschnitt-kopf">
+    <h2 id="ab-detail-titel">Profil</h2>
+  </div>
+  <div class="calc">
+    <dl id="ab-detail-daten"></dl>
+    <h3>Verdrahtung</h3>
+    <p id="ab-detail-wiring"></p>
+    <h3>Dokument</h3>
+    <pre id="ab-detail-json"></pre>
+    <div class="ab-tools">
+      <button class="btn-sm" type="button" id="ab-kopieren">Dokument kopieren</button>
+      <button class="btn-sm" type="button" id="ab-bearbeiten">Als Vorlage ins Formular</button>
+      <button class="btn-sm" type="button" id="ab-detail-zu">Schließen</button>
+    </div>
+    <p class="field-hint">In der Bridge einspielen: Settings → Rig → „Import JSON", Dokument
+      einfügen, „Store profile" — oder per Konsole <code>rig import &lt;json&gt;</code>.</p>
+  </div>
+</section>
+
+<section class="wrap weit section">
+  <div class="abschnitt-kopf">
+    <h2>Profil einreichen</h2>
+    <p class="section-intro">Ein Profil beschreibt eine Protokollfamilie: <strong>ascii</strong> für
+      zeilenbasierte CAT-Befehle wie bei Yaesu, Kenwood, Elecraft oder Xiegu (<code>FA;</code> →
+      <code>FA014074000;</code>), <strong>civ</strong> für Icom CI-V. Eingereicht wird, was du am
+      Gerät ausprobiert hast; nach der Freigabe steht es im Katalog. Die Bridge selbst hat den
+      Knopf „Share on afu.tools", der das Formular vorausfüllt.</p>
+  </div>
+  <form class="calc" id="ab-form">
+    <div class="ab-grid">
+      <div class="field"><label for="f-id">Kennung</label><input id="f-id" required maxlength="23" pattern="[A-Za-z0-9_-]{2,23}" placeholder="ic705"><span class="field-hint">2–23 Zeichen, Buchstaben, Ziffern, - und _</span></div>
+      <div class="field"><label for="f-name">Name</label><input id="f-name" required maxlength="47" placeholder="Icom IC-705 (CI-V)"></div>
+      <div class="field"><label for="f-ruf">Dein Rufzeichen</label><input id="f-ruf" maxlength="20" placeholder="DK5DEN"><span class="field-hint">steht als Einreicher im Katalog, optional</span></div>
+      <div class="field"><label for="f-family">Familie</label><select id="f-family"><option value="ascii">ascii (Yaesu, Kenwood, Elecraft …)</option><option value="civ">civ (Icom CI-V)</option><option value="none">none (Frequenz nur aus dem Netz)</option></select></div>
+      <div class="field"><label for="f-baud">Baud</label><select id="f-baud"><option>4800</option><option>9600</option><option>19200</option><option selected>38400</option><option>57600</option><option>115200</option></select></div>
+      <div class="field"><label for="f-invert">Pegel invertiert</label><select id="f-invert"><option value="false">nein</option><option value="true">ja</option></select></div>
+      <div class="field breit"><label for="f-wiring">Verdrahtung</label><textarea id="f-wiring" rows="3" maxlength="600" placeholder="Welche Buchse, welche Pins auf RX/TX der Bridge, Pegel, Menüeinstellungen am Gerät"></textarea></div>
+
+      <div class="ab-fam" id="fam-ascii">
+        <div class="field"><label for="f-term">Endezeichen</label><input id="f-term" maxlength="1" value=";"></div>
+        <div class="field"><label for="f-poll">Abfrage</label><input id="f-poll" maxlength="39" value="FA;FB;FT;"><span class="field-hint">wird jede Sekunde gesendet</span></div>
+        <div class="field"><label for="f-init">Auto-Info</label><input id="f-init" maxlength="23" value="AI1;"><span class="field-hint">Kenwood/Elecraft: AI2;</span></div>
+        <div class="field"><label for="f-initevery">Auto-Info alle (s)</label><input id="f-initevery" type="number" min="0" max="3600" value="10"></div>
+        <div class="field"><label for="f-main">Hauptfrequenz: Präfix</label><input id="f-main" maxlength="3" value="FA"></div>
+        <div class="field"><label for="f-mainskip">… Zeichen überspringen</label><input id="f-mainskip" type="number" min="0" max="40" value="0"></div>
+        <div class="field"><label for="f-maindig">… Ziffern</label><input id="f-maindig" type="number" min="0" max="40" value="9"><span class="field-hint">Yaesu 9, Kenwood 11, 0 = Rest</span></div>
+        <div class="field"><label for="f-sub">Zweite Frequenz: Präfix</label><input id="f-sub" maxlength="3" value="FB"><span class="field-hint">leer, wenn es keine gibt</span></div>
+        <div class="field"><label for="f-subskip">… überspringen</label><input id="f-subskip" type="number" min="0" max="40" value="0"></div>
+        <div class="field"><label for="f-subdig">… Ziffern</label><input id="f-subdig" type="number" min="0" max="40" value="9"></div>
+        <div class="field"><label for="f-tx">Sendeseite: Präfix</label><input id="f-tx" maxlength="3" value="FT"><span class="field-hint">Antwort, die sagt, welche Seite sendet</span></div>
+        <div class="field"><label for="f-txsub">… Wert für „zweite Seite sendet"</label><input id="f-txsub" maxlength="3" value="1"></div>
+      </div>
+
+      <div class="ab-fam" id="fam-civ">
+        <div class="field"><label for="f-addr">CI-V-Adresse (hex)</label><input id="f-addr" maxlength="2" value="a4"><span class="field-hint">IC-705 a4, IC-7300 94, IC-9700 a2</span></div>
+        <div class="field"><label for="f-cpoll">Abfragen (hex, Komma)</label><input id="f-cpoll" value="03,2501,0F"></div>
+        <div class="field"><label for="f-cmain">Frequenz-Befehl</label><input id="f-cmain" maxlength="8" value="03"></div>
+        <div class="field"><label for="f-csub">Zweite VFO (Befehl+Sub)</label><input id="f-csub" maxlength="8" value="2501"></div>
+        <div class="field"><label for="f-csplit">Split-Befehl</label><input id="f-csplit" maxlength="8" value="0F"></div>
+        <div class="field"><label for="f-ctrx">Transceive-Befehl</label><input id="f-ctrx" maxlength="8" value="00"></div>
+      </div>
+
+      <div class="field breit"><label for="f-json">Dokument (JSON)</label><textarea id="f-json" class="ab-json" spellcheck="false"></textarea><span class="field-hint">Entsteht aus den Feldern; wer mag, bearbeitet direkt hier. Das ist, was die Bridge bekommt.</span></div>
+    </div>
+    <div class="ab-tools">
+      <button class="btn" type="submit">Einreichen</button>
+      <button class="btn-sm" type="button" id="ab-leeren">Formular leeren</button>
+      <span class="field-hint" id="ab-form-status"></span>
+    </div>
+    <p class="note" id="ab-hinweis" hidden></p>
+  </form>
+</section>
+
+<section class="wrap weit section" id="ab-eigene" hidden>
+  <div class="abschnitt-kopf">
+    <h2>Deine Einreichungen</h2>
+    <p class="section-intro">Gehören zu diesem Browser. Ein erneutes Einreichen unter derselben
+      Kennung ersetzt das Profil und wartet wieder auf die Freigabe.</p>
+  </div>
+  <div style="overflow:auto">
+    <table class="data"><thead><tr><th>Profil</th><th>Zustand</th><th>Version</th><th></th></tr></thead>
+      <tbody id="ab-eigene-zeilen"></tbody></table>
+  </div>
+</section>
+</main>
+
+<!--#include virtual="/_footer.html" -->
+<script src="/app.js?v=20260916a"></script>
+<script src="/js/antenna-bridge.js?v=20260916a"></script>
+</body>
+</html>

@@ -20,10 +20,13 @@ hard-wired to a specific antenna or rig:
   antenna relays never act together. An output may appear in the rules of
   several antennas with different ranges. Antennas carry a type (efhw,
   dipole, vertical, loop, beam, wire, other) for the overview.
-- **Rig presets** set the CAT protocol family (Yaesu ASCII, Kenwood/Elecraft
-  ASCII, Icom CI-V binary), baud rate and CI-V address, and carry the wiring
-  notes for the jack. Pins and levels are settings, so the same board works
-  on the FTX-1 TUNER/LINEAR jack, an RS-232 port through a MAX3232, an
+- **Rig profiles** describe how to talk to a radio: protocol family (line
+  based ASCII as Yaesu, Kenwood and Elecraft use it, or Icom CI-V), baud
+  rate, which answers carry the frequency, and the wiring of the jack. Seven
+  are built in, own ones are small JSON documents stored on the bridge, and
+  a catalog on [afu.tools/antenna-bridge](https://afu.tools/antenna-bridge)
+  lets people share theirs. Pins and levels are settings, so the same board
+  works on the FTX-1 TUNER/LINEAR jack, an RS-232 port through a MAX3232, an
   Elecraft ACC1 or a CI-V bus.
 - A manual `freq` command (or the `network` rig preset) replaces CAT when
   the frequency comes from a PC.
@@ -42,25 +45,51 @@ jacks need a level adaption to the 3.3 V ESP: 5 V CMOS/TTL (Yaesu jacks,
 CI-V) through a BSS138 shifter or a divider, RS-232 through a MAX3232,
 Elecraft 3.3 V direct.
 
-### Rig presets
+### Rig profiles
 
-| Preset | Protocol | Baud | Jack |
+| Built in | Family | Baud | Jack |
 | --- | --- | --- | --- |
-| `ftx1` | yaesu | 38400 | FTX-1 TUNER/LINEAR (CAT-3), 5 V CMOS, see below |
-| `ftdx10` | yaesu | 38400 | FT-DX10 rear RS-232, MAX3232 |
-| `ft891` | yaesu | 4800 | FT-891 CAT/LINEAR mini-DIN, TTL |
-| `kenwood` | kenwood | 9600 | TS-590/TS-890 COM RS-232, MAX3232 |
-| `elecraft` | kenwood | 38400 | KX2/KX3/K3 ACC1, 3.3 V direct |
-| `icom` | icom | 19200 | CI-V single wire, open drain; `set civaddr` (IC-705 `a4`, IC-7300 `94`, IC-9700 `a2`) |
+| `ftx1` | ascii | 38400 | FTX-1 TUNER/LINEAR (CAT-3), 5 V CMOS, see below |
+| `ftdx10` | ascii | 38400 | FT-DX10 rear RS-232, MAX3232 |
+| `ft891` | ascii | 4800 | FT-891 CAT/LINEAR mini-DIN, TTL |
+| `kenwood` | ascii | 9600 | TS-590/TS-890 COM RS-232, MAX3232, 11 digit frequencies, `AI2;` |
+| `elecraft` | ascii | 38400 | KX2/KX3/K3 ACC1, 3.3 V direct |
+| `icom` | civ | 19200 | CI-V single wire, open drain; `set civaddr` (IC-705 `a4`, IC-7300 `94`, IC-9700 `a2`) |
 | `network` | none | – | no CAT, frequency from UDP/HTTP |
 
-`rig set <preset>` applies protocol, baud rate and CI-V address; `rig`
-prints the wiring notes of the current preset; `set proto|catbaud|catrx|cattx|catinv|civaddr`
-override single values (`rig` then reads `custom`). The Yaesu and Kenwood
-families are polled with `FA;FB;FT;` and switched to auto information
-(`AI1;` / `AI2;`), CI-V is polled with commands `03`, `25 01` and `0F` and
-accepts transceive broadcasts; the transmitting VFO (`FT`, CI-V split)
-decides which frequency counts.
+A profile is a JSON document (`firmware/src/rig.h` has the full format):
+
+```json
+{"id":"ftx1","name":"Yaesu FTX-1 (TUNER/LINEAR, CAT-3)","author":"DK5DEN","version":1,
+ "family":"ascii","baud":38400,"invert":false,"wiring":"how the jack is connected",
+ "ascii":{"term":";","poll":"FA;FB;FT;","init":"AI1;","initEvery":10,
+          "main":{"prefix":"FA","skip":0,"digits":9},"sub":{"prefix":"FB","skip":0,"digits":9},
+          "info":[{"prefix":"IF","skip":5,"digits":9,"to":"main"}],
+          "tx":{"prefix":"FT","sub":"1"}},
+ "civ":{"addr":"a4","poll":["03","2501","0F"],"main":"03","sub":"2501","split":"0F","transceive":"00"}}
+```
+
+The `ascii` family covers every line based CAT dialect: `poll` is sent every
+`catpoll` ms, `init` (auto information) every `initEvery` s, answers are
+matched by prefix and parsed as `digits` digits after `skip` characters
+(`digits` 0 = all remaining), `tx` names the answer that tells which side
+transmits. The `civ` family polls the listed commands and accepts transceive
+broadcasts. `rig set <id>` uses a profile and takes baud rate, inversion and
+CI-V address from it; `set catbaud|catrx|cattx|catinv|civaddr` override
+single values afterwards.
+
+Own profiles: `rig import <json>` on the console, `POST /api/rig` with the
+document as body, or the Import button on the Settings page; they live in
+LittleFS under `/rigs/<id>.json`, a stored profile with the id of a built-in
+one replaces it. `rig show [id]` / `GET /api/rig?id=…` exports, `rig del <id>`
+removes.
+
+Sharing: the Settings page has "Catalog from afu.tools" (lists released
+profiles, one click installs) and "Share on afu.tools" (opens the catalog
+page with the current profile prefilled). Submissions are visible to their
+submitter at once and to everyone after a release by the site
+administration. The server side lives in `afutools/` (FastAPI module,
+administration page, site page, deploy script).
 
 ### FTX-1 TUNER/LINEAR jack (10-pin mini-DIN, Field head)
 
@@ -157,7 +186,7 @@ list.
 | `status` | frequency, source, active antenna, CAT link, counts, WiFi |
 | `freq <hz>` | manual frequency, used until the rig reports a change |
 | `apply` | re-apply the current frequency to all outputs |
-| `rig` / `rig list` / `rig set <preset>` | rig preset and wiring notes |
+| `rig` / `rig list` / `rig set <id>` / `rig show [id]` / `rig import <json>` / `rig del <id>` | rig profiles |
 | `ant list` / `ant add <name> [type]` / `ant type <name> <type>` / `ant del <name>` / `ant select <name\|->` | antennas |
 | `out list` / `out add …` / `out del <name>` | outputs, see above |
 | `rule list [antenna\|-]` / `rule add <antenna\|-> <out> <fmin> <fmax>` / `rule set <i> <fmin> <fmax>` / `rule del <i>` / `rule clear` | rules, `-` = global |
@@ -172,7 +201,6 @@ Settings (persisted in NVS):
 
 | Key | Default | Meaning |
 | --- | --- | --- |
-| `proto` | yaesu | CAT protocol family: `none`, `yaesu`, `kenwood`, `icom` |
 | `catbaud` | 38400 | CAT baud rate |
 | `catrx` / `cattx` | 20 / 21 | UART pins |
 | `catinv` | 0 | invert UART levels |
@@ -190,8 +218,9 @@ Port 80, single page (`firmware/src/page.h`): frequency and CAT state,
 antennas with type and activate button, outputs with live state (relay
 state, link, battery voltage, RSSI, last reply, which antennas use them),
 the frequency map, output setup with Bluetooth scan and one-click add,
-rules per antenna with band presets, rig preset with wiring notes,
-settings, WiFi, help and console. HTTP API: `GET /api/status`, `POST /api/cmd` (`line`),
+rules per antenna with band presets, rig profiles with wiring notes, import,
+export and the afu.tools catalog, settings, WiFi, help and console. Extra
+endpoints: `GET /api/rig?id=…` and `POST /api/rig` for profile documents. HTTP API: `GET /api/status`, `POST /api/cmd` (`line`),
 `POST /api/wifi`, `GET /api/scan`.
 
 WiFi behaviour is the same as magloop-tune: up to five stored networks,

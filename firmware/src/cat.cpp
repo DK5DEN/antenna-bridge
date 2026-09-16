@@ -1,26 +1,9 @@
 #include "cat.h"
 #include "config.h"
 #include "settings.h"
+#include "rig.h"
 
 namespace {
-
-const cat::Preset PRESETS[] = {
-    {"ftx1", PROTO_YAESU, 38400, 0, "Yaesu FTX-1 (TUNER/LINEAR, CAT-3)",
-     "10-pin mini-DIN on the Field head: TXD (BAND A) -> level shifter -> RX pin, RXD (BAND B) <- level shifter <- TX pin, +13.8 V OUT, GND. 5 V CMOS, use a BSS138 shifter. Menu OPERATION SETTING > GENERAL > TUN/LIN PORT SELECT = CAT-3, CAT-3 RATE 38400. Not usable while a tuner, ATAS or the Optima is on the jack."},
-    {"ftdx10", PROTO_YAESU, 38400, 0, "Yaesu FT-DX10 (rear RS-232)",
-     "DE-9 RS-232: pin 2 TXD -> MAX3232 -> RX pin, pin 3 RXD <- MAX3232 <- TX pin, pin 5 GND. Menu CAT RATE 38400, CAT RTS OFF."},
-    {"ft891", PROTO_YAESU, 4800, 0, "Yaesu FT-891 (CAT/LINEAR jack, TTL)",
-     "8-pin mini-DIN CAT/LINEAR: TXD -> RX pin, RXD <- TX pin, GND. 5 V TTL, use a level shifter. Menu CAT RATE (default 4800)."},
-    {"kenwood", PROTO_KENWOOD, 9600, 0, "Kenwood TS-590 / TS-890 (COM RS-232)",
-     "DE-9 RS-232 via MAX3232 (TXD pin 2 -> RX pin, RXD pin 3 <- TX pin, GND pin 5). Menu COM port baud rate."},
-    {"elecraft", PROTO_KENWOOD, 38400, 0, "Elecraft KX2 / KX3 / K3 (ACC1)",
-     "KX2/KX3 ACC1 3.5 mm jack, 3.3 V logic, connect directly (TXD -> RX pin, RXD <- TX pin, GND). Menu RS232 baud 38400."},
-    {"icom", PROTO_ICOM, 19200, DEF_CIV_ADDR, "Icom CI-V (IC-705, IC-7300, IC-9700 ...)",
-     "CI-V 3.5 mm jack: tip = data (single wire, open drain, 5 V pull-up in the rig), sleeve GND. RX pin to the bus through a 3.3 V level shifter or 2k2/3k3 divider, TX pin through a diode (cathode at the TX pin, anode at the bus). set civaddr to the rig address (IC-705 a4, IC-7300 94, IC-9700 a2), CI-V baud 19200, CI-V transceive ON."},
-    {"network", PROTO_NONE, 38400, 0, "No CAT, frequency from the network",
-     "Frequency comes from a PC over UDP or HTTP (freq <hz>) or from this page. Use this with the Optima in the shack: a CAT program on the PC forwards the frequency."},
-};
-constexpr uint8_t PRESET_COUNT = sizeof(PRESETS) / sizeof(PRESETS[0]);
 
 String   rxBuf;
 uint8_t  frame[64];
@@ -28,39 +11,44 @@ uint8_t  frameLen = 0;
 bool     inFrame = false;
 uint32_t fMain = 0, fSub = 0;
 int8_t   side = -1;
-uint32_t lastRx = 0, lastPoll = 0, lastAi = 0, count = 0;
+uint32_t lastRx = 0, lastPoll = 0, lastInit = 0, count = 0;
 String   lastMsg;
-
-constexpr uint32_t AI_INTERVAL_MS = 10000;   // AI is reset when the rig powers off, so repeat it
-
-bool allDigits(const String& s, int from, int to) {
-    if (from >= to || to > (int)s.length()) return false;
-    for (int i = from; i < to; i++)
-        if (!isDigit(s[i])) return false;
-    return true;
-}
+bool     portOpen = false;
 
 void gotData() { lastRx = millis(); count++; }
 
-// ---- ASCII (Yaesu / Kenwood / Elecraft) ----
+// ---- ASCII families ----
+
+// Parse a frequency answer described by a spec: prefix, skipped characters,
+// then digits (0 = all remaining).
+bool specFreq(const rig::Spec& s, const String& m, uint32_t& f) {
+    if (!s.prefix[0]) return false;
+    size_t pl = strlen(s.prefix);
+    if (m.length() < pl + s.skip + 1 || strncmp(m.c_str(), s.prefix, pl) != 0) return false;
+    size_t from = pl + s.skip;
+    size_t to = s.digits ? from + s.digits : m.length();
+    if (to > m.length()) return false;
+    for (size_t i = from; i < to; i++)
+        if (!isDigit(m[i])) return false;
+    f = strtoul(m.substring(from, to).c_str(), nullptr, 10);
+    return true;
+}
+
 void handleAscii(const String& m) {
-    if (m.length() < 3) return;
+    const rig::Profile& p = rig::current();
+    if (m.length() < 2) return;
     lastMsg = m;
     gotData();
-    char a = m[0], b = m[1];
-    if (a == 'F' && (b == 'A' || b == 'B') && allDigits(m, 2, m.length())) {
-        uint32_t f = strtoul(m.c_str() + 2, nullptr, 10);
-        if (b == 'A') fMain = f; else fSub = f;
-    } else if (a == 'F' && b == 'T' && m.length() == 3 && isDigit(m[2])) {
-        side = m[2] - '0';
-    } else if (a == 'I' && b == 'F') {
-        if (settings.proto == PROTO_KENWOOD && allDigits(m, 2, 13)) {
-            fMain = strtoul(m.substring(2, 13).c_str(), nullptr, 10);
-        } else if (settings.proto == PROTO_YAESU && m.length() >= 16 && allDigits(m, 7, 16)) {
-            fMain = strtoul(m.substring(7, 16).c_str(), nullptr, 10);
-        }
-    } else if (a == 'O' && b == 'I' && settings.proto == PROTO_YAESU && m.length() >= 16 && allDigits(m, 7, 16)) {
-        fSub = strtoul(m.substring(7, 16).c_str(), nullptr, 10);
+    uint32_t f;
+    if (specFreq(p.mainSpec, m, f)) { fMain = f; return; }
+    if (specFreq(p.subSpec, m, f)) { fSub = f; return; }
+    for (uint8_t i = 0; i < p.infoCount; i++) {
+        if (specFreq(p.info[i], m, f)) { if (p.infoTo[i]) fSub = f; else fMain = f; return; }
+    }
+    if (p.txPrefix[0]) {
+        size_t pl = strlen(p.txPrefix);
+        if (m.length() > pl && strncmp(m.c_str(), p.txPrefix, pl) == 0)
+            side = m.substring(pl) == p.txSubVal ? 1 : 0;
     }
 }
 
@@ -85,6 +73,7 @@ void civSend(const uint8_t* payload, uint8_t n) {
 
 void handleCiv(const uint8_t* f, uint8_t n) {
     // f: to from cmd [sub] data...
+    const rig::Profile& p = rig::current();
     if (n < 3) return;
     uint8_t from = f[1], cmd = f[2];
     if (from == CIV_OWN_ADDR) return;           // our own echo on the single-wire bus
@@ -93,12 +82,13 @@ void handleCiv(const uint8_t* f, uint8_t n) {
     h.trim();
     lastMsg = h;
     gotData();
-    if ((cmd == 0x00 || cmd == 0x03) && n >= 8) {
+    if ((cmd == p.civMain || cmd == p.civTransceive) && n >= 8) {
         fMain = bcdFreq(f + 3, 5);
-    } else if (cmd == 0x25 && n >= 9) {
-        uint32_t v = bcdFreq(f + 4, 5);
-        if (f[3] == 0x00) fMain = v; else fSub = v;
-    } else if (cmd == 0x0F && n >= 4) {
+    } else if (p.civSub[0] && cmd == p.civSub[0] && n >= 9 && (p.civSub[1] == 0 || f[3] == p.civSub[1])) {
+        fSub = bcdFreq(f + 4, 5);
+    } else if (p.civSub[0] && cmd == p.civSub[0] && n >= 9 && f[3] == 0x00) {
+        fMain = bcdFreq(f + 4, 5);              // 25 00: selected VFO
+    } else if (p.civSplit && cmd == p.civSplit && n >= 4) {
         side = f[3] ? 1 : 0;                    // split on: transmit on the unselected VFO
     }
 }
@@ -121,49 +111,17 @@ void civByte(uint8_t c) {
 }
 
 void poll() {
-    switch (settings.proto) {
-        case PROTO_YAESU:
-        case PROTO_KENWOOD:
-            Serial0.print("FA;FB;FT;");
-            break;
-        case PROTO_ICOM: {
-            uint8_t a[] = {0x03};             // operating frequency
-            uint8_t b[] = {0x25, 0x01};       // unselected VFO (newer rigs, ignored by older ones)
-            uint8_t c[] = {0x0F};             // split
-            civSend(a, 1); civSend(b, 2); civSend(c, 1);
-            break;
-        }
-        default: break;
+    const rig::Profile& p = rig::current();
+    if (p.family == rig::FAM_ASCII) {
+        if (p.poll[0]) Serial0.print(p.poll);
+    } else if (p.family == rig::FAM_CIV) {
+        for (uint8_t i = 0; i < p.civPollCount; i++) civSend(p.civPoll[i], p.civPollLen[i]);
     }
-}
-
-void autoInfo() {
-    if (settings.proto == PROTO_YAESU) Serial0.print("AI1;");
-    else if (settings.proto == PROTO_KENWOOD) Serial0.print("AI2;");
 }
 
 }  // namespace
 
 namespace cat {
-
-const Preset* presets(uint8_t& n) { n = PRESET_COUNT; return PRESETS; }
-
-const Preset* preset(const String& name) {
-    for (uint8_t i = 0; i < PRESET_COUNT; i++)
-        if (name.equalsIgnoreCase(PRESETS[i].name)) return &PRESETS[i];
-    return nullptr;
-}
-
-bool applyPreset(const String& name) {
-    const Preset* p = preset(name);
-    if (!p) return false;
-    strlcpy(settings.rig, p->name, sizeof(settings.rig));
-    settings.proto = p->proto;
-    settings.catBaud = p->baud;
-    if (p->civAddr) settings.civAddr = p->civAddr;
-    restart();
-    return true;
-}
 
 void begin() {
     fMain = fSub = 0;
@@ -173,19 +131,21 @@ void begin() {
     inFrame = false;
     frameLen = 0;
     lastPoll = 0;
-    lastAi = 0;
-    if (settings.proto == PROTO_NONE) return;
+    lastInit = 0;
+    portOpen = false;
+    if (rig::current().family == rig::FAM_NONE) return;
     Serial0.begin(settings.catBaud, SERIAL_8N1, settings.catRx, settings.catTx, settings.catInvert);
+    portOpen = true;
 }
 
 void restart() {
-    Serial0.end();
+    if (portOpen) Serial0.end();
     begin();
 }
 
 void send(const String& s) {
-    if (settings.proto == PROTO_NONE) return;
-    if (settings.proto == PROTO_ICOM) {
+    if (!portOpen) return;
+    if (rig::current().family == rig::FAM_CIV) {
         // hex bytes; a bare payload (not starting with FE) gets the CI-V header
         uint8_t b[64];
         uint8_t n = 0;
@@ -208,12 +168,13 @@ void send(const String& s) {
 }
 
 void loop() {
-    if (settings.proto == PROTO_NONE) return;
+    if (!portOpen) return;
+    const rig::Profile& p = rig::current();
     while (Serial0.available()) {
         uint8_t c = Serial0.read();
-        if (settings.proto == PROTO_ICOM) {
+        if (p.family == rig::FAM_CIV) {
             civByte(c);
-        } else if (c == ';') {
+        } else if (c == (uint8_t)p.term) {
             handleAscii(rxBuf);
             rxBuf = "";
         } else if (c >= 0x20 && rxBuf.length() < 80) {
@@ -227,13 +188,13 @@ void loop() {
         lastPoll = now;
         poll();
     }
-    if (now - lastAi >= AI_INTERVAL_MS) {
-        lastAi = now;
-        autoInfo();
+    if (p.family == rig::FAM_ASCII && p.init[0] && p.initEvery && now - lastInit >= (uint32_t)p.initEvery * 1000) {
+        lastInit = now;
+        Serial0.print(p.init);
     }
 }
 
-bool linkOk() { return settings.proto != PROTO_NONE && lastRx != 0 && millis() - lastRx < settings.catPollMs * 3 + 1000; }
+bool linkOk() { return portOpen && lastRx != 0 && millis() - lastRx < settings.catPollMs * 3 + 1000; }
 uint32_t lastRxAgeMs() { return lastRx ? millis() - lastRx : 0xFFFFFFFF; }
 uint32_t freqMain() { return fMain; }
 uint32_t freqSub() { return fSub; }

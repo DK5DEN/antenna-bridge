@@ -2,6 +2,7 @@
 #include "config.h"
 #include "settings.h"
 #include "cat.h"
+#include "rig.h"
 #include "engine.h"
 #include "ble.h"
 #include "net.h"
@@ -141,10 +142,12 @@ static void printHelp(Print& out) {
     out.println(F("  cat                          CAT link status"));
     out.println(F("  cat <cmd>                    raw CAT command, e.g. cat FA; (hex bytes for CI-V)"));
     out.println(F("  rig                          current rig and wiring notes"));
-    out.println(F("  rig list                     rig presets"));
-    out.println(F("  rig set <preset>             apply a preset (protocol, baud rate, CI-V address)"));
+    out.println(F("  rig list                     rig profiles, built in and stored"));
+    out.println(F("  rig set <id>                 use a profile (family, baud rate, CI-V address)"));
+    out.println(F("  rig show [id]                profile as JSON"));
+    out.println(F("  rig import <json>            store a profile (also POST /api/rig)"));
+    out.println(F("  rig del <id>                 remove a stored profile"));
     out.println(F("  set                          show settings"));
-    out.println(F("  set proto none|yaesu|kenwood|icom   CAT protocol family"));
     out.println(F("  set catbaud <bps>            CAT baud rate"));
     out.println(F("  set catrx <pin> | set cattx <pin>   UART pins (default 20/21)"));
     out.println(F("  set catinv 0|1               invert UART levels"));
@@ -161,8 +164,8 @@ static void printHelp(Print& out) {
 
 static void printSettings(Print& out) {
     const Settings& s = settings;
-    out.printf("rig=%s proto=%s catbaud=%lu catrx=%d cattx=%d catinv=%d civaddr=%02x catpoll=%lu catvfo=%u settle=%lu udpport=%u wifion=%d blehold=%d wifi=%u outs=%u rules=%u ants=%u\n",
-               s.rig, protoName(s.proto), (unsigned long)s.catBaud, s.catRx, s.catTx, s.catInvert, s.civAddr,
+    out.printf("rig=%s family=%s catbaud=%lu catrx=%d cattx=%d catinv=%d civaddr=%02x catpoll=%lu catvfo=%u settle=%lu udpport=%u wifion=%d blehold=%d wifi=%u outs=%u rules=%u ants=%u\n",
+               s.rig, rig::familyName(rig::current().family), (unsigned long)s.catBaud, s.catRx, s.catTx, s.catInvert, s.civAddr,
                (unsigned long)s.catPollMs, s.catVfo, (unsigned long)s.settleMs,
                s.udpPort, s.wifiOn, s.bleHold, s.wifiCount, s.outCount, s.ruleCount, s.antCount);
 }
@@ -353,13 +356,9 @@ static void cmdSet(String* t, int n, Print& out) {
     if (n < 3) { printSettings(out); return; }
     String key = t[1]; key.toLowerCase();
     long v = 0;
-    if (key != "proto" && key != "civaddr" && !parseLong(t[2], v)) { out.println("ERR value"); return; }
+    if (key != "civaddr" && !parseLong(t[2], v)) { out.println("ERR value"); return; }
 
-    if (key == "proto") {
-        uint8_t p;
-        if (!protoParse(t[2], p)) { out.println("ERR none|yaesu|kenwood|icom"); return; }
-        s.proto = p; strlcpy(s.rig, "custom", sizeof(s.rig)); cat::restart();
-    } else if (key == "catrx" || key == "cattx") {
+    if (key == "catrx" || key == "cattx") {
         if (!validPin(v)) { out.println("ERR pin 0-7, 10, 20, 21"); return; }
         if (key == "catrx") s.catRx = v; else s.catTx = v;
         cat::restart();
@@ -429,35 +428,48 @@ void handleCommand(String line, Print& out) {
         if (n >= 2) {
             String raw = line.substring(line.indexOf(t[1]));
             raw.trim();
-            if (settings.proto != PROTO_ICOM && !raw.endsWith(";")) raw += ";";
+            if (rig::current().family == rig::FAM_ASCII && !raw.endsWith(String(rig::current().term))) raw += rig::current().term;
             cat::send(raw);
             out.printf("OK sent %s\n", raw.c_str());
         } else {
-            out.printf("cat=%s rig=%s proto=%s baud=%lu rxage=%lums rxcount=%lu main=%lu sub=%lu tx=%s last=%s\n",
-                       cat::linkOk() ? "ok" : "no-link", settings.rig, protoName(settings.proto), (unsigned long)settings.catBaud,
+            out.printf("cat=%s rig=%s family=%s baud=%lu rxage=%lums rxcount=%lu main=%lu sub=%lu tx=%s last=%s\n",
+                       cat::linkOk() ? "ok" : "no-link", settings.rig, rig::familyName(rig::current().family), (unsigned long)settings.catBaud,
                        (unsigned long)cat::lastRxAgeMs(), (unsigned long)cat::rxCount(),
                        (unsigned long)cat::freqMain(), (unsigned long)cat::freqSub(),
                        cat::txSide() < 0 ? "?" : (cat::txSide() ? "sub" : "main"), cat::lastMessage().c_str());
         }
     } else if (cmd == "rig") {
         String sub = n > 1 ? t[1] : ""; sub.toLowerCase();
-        uint8_t m;
-        const cat::Preset* p = cat::presets(m);
+        String err;
         if (sub == "list") {
-            for (uint8_t i = 0; i < m; i++)
-                out.printf("rig %-9s proto=%-7s baud=%-6lu %s\n", p[i].name, protoName(p[i].proto), (unsigned long)p[i].baud, p[i].rigName);
-            out.printf("OK %u presets, current=%s\n", m, settings.rig);
+            rig::Entry e[24];
+            int m = rig::list(e, 24);
+            for (int i = 0; i < m; i++)
+                out.printf("rig %-12s %-5s %-6lu %s%s\n", e[i].id, rig::familyName(e[i].family), (unsigned long)e[i].baud, e[i].name, e[i].stored ? " (stored)" : "");
+            out.printf("OK %d profiles, current=%s\n", m, settings.rig);
         } else if (sub == "set" && n >= 3) {
-            if (!cat::applyPreset(t[2])) { out.println("ERR unknown preset, see rig list"); return; }
+            if (!rig::select(t[2], err)) { out.println("ERR " + err); return; }
             settings.save();
-            out.printf("OK rig=%s proto=%s baud=%lu civaddr=%02x\n", settings.rig, protoName(settings.proto), (unsigned long)settings.catBaud, settings.civAddr);
+            out.printf("OK rig=%s family=%s baud=%lu civaddr=%02x\n", settings.rig, rig::familyName(rig::current().family), (unsigned long)settings.catBaud, settings.civAddr);
+        } else if (sub == "show") {
+            String doc = rig::document(n >= 3 ? t[2] : String(settings.rig));
+            if (!doc.length()) { out.println("ERR unknown rig"); return; }
+            out.println(doc);
+        } else if (sub == "import") {
+            int p = line.indexOf(t[1]) + t[1].length();
+            String doc = line.substring(p); doc.trim();
+            if (!rig::import(doc, err)) { out.println("ERR " + err); return; }
+            out.println("OK stored, rig set <id> to use it");
+        } else if (sub == "del" && n >= 3) {
+            if (!rig::remove(t[2])) { out.println("ERR not a stored profile"); return; }
+            settings.save();
+            out.printf("OK removed, current=%s\n", settings.rig);
         } else if (sub == "") {
-            const cat::Preset* cur = cat::preset(settings.rig);
-            out.printf("rig=%s proto=%s baud=%lu rx=%d tx=%d inv=%d civaddr=%02x link=%s\n", settings.rig, protoName(settings.proto),
+            const rig::Profile& p = rig::current();
+            out.printf("rig=%s name=\"%s\" family=%s baud=%lu rx=%d tx=%d inv=%d civaddr=%02x link=%s\n", settings.rig, p.name, rig::familyName(p.family),
                        (unsigned long)settings.catBaud, settings.catRx, settings.catTx, settings.catInvert, settings.civAddr, cat::linkOk() ? "ok" : "no");
-            if (cur) { out.println(cur->rigName); out.println(cur->wiring); }
         } else {
-            out.println("ERR usage: rig | rig list | rig set <preset>");
+            out.println("ERR usage: rig | rig list | rig set <id> | rig show [id] | rig import <json> | rig del <id>");
         }
     } else if (cmd == "set") {
         cmdSet(t, n, out);

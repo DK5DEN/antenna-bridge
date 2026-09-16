@@ -117,10 +117,12 @@ pre{background:#0f1216;border:1px solid var(--line);border-radius:7px;padding:8p
 <div class="view" id="v-settings">
 <section class="card">
 <h2>Rig</h2>
-<div class="row"><select id="rigsel" style="width:260px"></select><button class="acc" onclick="cmd('rig set '+v('rigsel'))">Apply preset</button></div>
+<div class="row"><select id="rigsel" style="width:260px"></select><button class="acc" onclick="cmd('rig set '+v('rigsel'))">Use</button><button class="sm err" id="rigdel" onclick="if(confirm('Remove stored profile '+v('rigsel')+'?'))cmd('rig del '+v('rigsel'))" hidden>✕ stored</button></div>
 <p class="tag" id="rigwire"></p>
+<div class="row"><button class="sm" onclick="rigExport()">Export JSON</button><button class="sm" onclick="$('rigimp').hidden=!$('rigimp').hidden">Import JSON</button><button class="sm" onclick="rigCatalog()">Catalog from afu.tools</button><button class="sm" onclick="rigShare()">Share on afu.tools</button></div>
+<div id="rigimp" hidden><textarea id="rigjson" style="width:100%;height:120px;background:#0f1216;color:var(--fg);border:1px solid #3a424c;border-radius:7px;padding:8px;font:12px ui-monospace,monospace" placeholder='{"id":"myrig","name":"…","family":"ascii","baud":38400,"ascii":{…}}'></textarea><div class="row"><button class="acc sm" onclick="rigImport()">Store profile</button><span class="tag">Format: see Help. A stored profile with the id of a built-in one replaces it.</span></div></div>
+<div id="rigcat" hidden><table><thead><tr><th>profile</th><th>family</th><th class="r">baud</th><th>by</th><th></th></tr></thead><tbody id="rigcatrows"></tbody></table><p class="tag" id="rigcatinfo"></p></div>
 <div class="grid2">
-<div><label>Protocol</label><select id="s_proto"><option value="none">none (network)</option><option value="yaesu">Yaesu ASCII</option><option value="kenwood">Kenwood / Elecraft</option><option value="icom">Icom CI-V</option></select></div>
 <div><label>CAT baud rate</label><select id="s_catbaud"><option>4800</option><option>9600</option><option>19200</option><option>38400</option><option>57600</option><option>115200</option></select></div>
 <div><label>RX pin (rig TXD)</label><input id="s_catrx" type="number"></div>
 <div><label>TX pin (rig RXD)</label><input id="s_cattx" type="number"></div>
@@ -164,8 +166,20 @@ pre{background:#0f1216;border:1px solid var(--line);border-radius:7px;padding:8p
 <div class="view" id="v-help">
 <section class="card">
 <h2>Wiring</h2>
-<p class="tag">Current rig: <b id="rigname">–</b>. RX pin <b id="rxpin">–</b> takes the rig TXD line, TX pin <b id="txpin">–</b> drives the rig RXD line. Notes for every preset:</p>
-<div id="wirings"></div>
+<p class="tag">Current rig: <b id="rigname">–</b>. RX pin <b id="rxpin">–</b> takes the rig TXD line, TX pin <b id="txpin">–</b> drives the rig RXD line.</p>
+<p class="tag" id="rigwire2"></p>
+<h3>Rig profile format</h3>
+<pre>{"id":"ftx1","name":"Yaesu FTX-1 (TUNER/LINEAR, CAT-3)","author":"DK5DEN","version":1,
+ "family":"ascii",            ascii | civ | none
+ "baud":38400,"invert":false,
+ "wiring":"how the jack is connected",
+ "ascii":{"term":";","poll":"FA;FB;FT;","init":"AI1;","initEvery":10,
+   "main":{"prefix":"FA","skip":0,"digits":9},   frequency answer: prefix, skipped chars, digits (0 = rest)
+   "sub":{"prefix":"FB","skip":0,"digits":9},
+   "info":[{"prefix":"IF","skip":5,"digits":9,"to":"main"}],
+   "tx":{"prefix":"FT","sub":"1"}},               answer value that means "sub transmits"
+ "civ":{"addr":"a4","poll":["03","2501","0F"],"main":"03","sub":"2501","split":"0F","transceive":"00"}}</pre>
+<p class="tag">Built-in profiles: <code>rig list</code>. A profile is stored with <code>rig import &lt;json&gt;</code>, <code>POST /api/rig</code> or the Import button; <code>rig show [id]</code> / <code>GET /api/rig?id=…</code> exports it. The catalog on afu.tools lists profiles other people shared; the Share button hands the current profile to that page.</p>
 <h3>Commands</h3>
 <table>
 <tr><td><code>status</code></td><td>one line summary</td></tr>
@@ -220,7 +234,7 @@ $('rulecards').innerHTML=groups.map(g=>{const rows=s.rules.map((r,i)=>[r,i]).fil
 return '<section class="card"><h2>'+g.title+' '+g.sub+'</h2><table><thead><tr><th>output</th><th class="r">from kHz</th><th class="r">to kHz</th><th></th></tr></thead><tbody>'+(rows.map(x=>'<tr><td>'+esc(x[0].out)+'</td><td class="r">'+khz(x[0].fmin)+'</td><td class="r">'+khz(x[0].fmax)+'</td><td class="r"><button class="sm err" onclick="cmd(\'rule del '+x[1]+'\')">✕</button></td></tr>').join('')||'<tr><td class="tag" colspan="4">no rules</td></tr>')+'</tbody></table>'
 +(allOuts.length?'<div class="row" style="margin-top:8px"><select id="rout'+g.k+'">'+allOuts.map(o=>'<option'+(keep['rout'+g.k]===o?' selected':'')+'>'+esc(o)+'</option>').join('')+'</select><input id="rmin'+g.k+'" type="number" step="0.1" placeholder="from kHz" value="'+(keep['rmin'+g.k]||'')+'"><input id="rmax'+g.k+'" type="number" step="0.1" placeholder="to kHz" value="'+(keep['rmax'+g.k]||'')+'"><button class="acc" onclick="ruleAdd(\''+g.k+'\')">Add rule</button></div>'
 +'<div class="row"><span class="tag">Bands:</span>'+BANDS.map(b=>'<button class="sm" onclick="band(\''+g.k+'\','+b[1]+','+b[2]+')">'+b[0]+'</button>').join(' ')+' <button class="sm" onclick="band(\''+g.k+'\',0,999999)">always</button></div>':'<p class="tag">add outputs first (Outputs tab)</p>')+'</section>';}).join('');}
-function saveSettings(){const keys=['proto','catbaud','catrx','cattx','catinv','civaddr','catpoll','catvfo','settle','udpport','wifion','blehold'];(async()=>{let n=0;for(const k of keys){const nv=String(v('s_'+k));if(S&&String(S.settings[k])!==nv){await cmd('set '+k+' '+nv);n++;}}dirty.clear();if(!n)log('nothing changed');poll();})();}
+function saveSettings(){const keys=['catbaud','catrx','cattx','catinv','civaddr','catpoll','catvfo','settle','udpport','wifion','blehold'];(async()=>{let n=0;for(const k of keys){const nv=String(v('s_'+k));if(S&&String(S.settings[k])!==nv){await cmd('set '+k+' '+nv);n++;}}dirty.clear();if(!n)log('nothing changed');poll();})();}
 async function wifiAdd(){const ssid=v('wssid'),pass=v('wpass');if(!ssid)return;log('> wifi add '+ssid);const r=await fetch('/api/wifi',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:new URLSearchParams({action:'add',ssid,pass})});log(await r.text());$('wpass').value='';}
 async function wifiDel(ssid){if(!confirm('Remove '+ssid+'?'))return;const r=await fetch('/api/wifi',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:new URLSearchParams({action:'del',ssid})});log(await r.text());}
 async function scan(){$('scanres').textContent='scanning…';for(let i=0;i<15;i++){const r=await (await fetch('/api/scan')).json();if(!r.running){const dl=$('scanlist');dl.innerHTML='';r.networks.sort((a,b)=>b.rssi-a.rssi);$('scanres').innerHTML=r.networks.map(n=>`<a href="#settings" onclick="$('wssid').value=${JSON.stringify(n.ssid).replace(/"/g,'&quot;')};return false">${esc(n.ssid)}</a> ${n.rssi} dBm${n.enc?'':' (open)'}`).join(' · ')||'nothing found';r.networks.forEach(n=>{const o=document.createElement('option');o.value=n.ssid;dl.appendChild(o);});return;}await new Promise(r=>setTimeout(r,700));}$('scanres').textContent='scan timeout';}
@@ -254,11 +268,18 @@ const w=s.wifi;$('net').innerHTML=w.mode==='sta'?esc(w.ssid)+' · '+w.ip+' · '+
 $('wifiinfo').innerHTML=(w.mode==='sta'?'Connected to <b>'+esc(w.ssid)+'</b> as '+w.ip+' ('+w.rssi+' dBm), <a href="http://'+w.hostname+'/" style="color:var(--acc)">http://'+w.hostname+'</a>':'Not connected to a network')+(w.ap?'<br>Access point <b>'+w.ap_ssid+'</b> active at '+w.ap_ip:'');
 $('apssid').textContent=w.ap_ssid;$('appass').textContent=w.ap_pass;$('host').textContent=w.hostname;$('fw').textContent=s.fw;$('uptime').textContent=fmtUp(s.uptime);$('udpp').textContent=s.settings.udpport;$('udpp2').textContent=s.settings.udpport;
 $('nets').innerHTML=w.networks.map(n=>'<tr><td>'+esc(n)+(n===w.ssid?' <span class="ok">●</span>':'')+'</td><td class="r"><button class="err sm" onclick=\'wifiDel('+JSON.stringify(n).replace(/'/g,'&#39;')+')\'>remove</button></td></tr>').join('')||'<tr><td class="tag">no networks stored</td></tr>';
-for(const k of ['proto','catbaud','catrx','cattx','catinv','civaddr','catpoll','catvfo','settle','udpport','wifion','blehold'])if(!dirty.has('s_'+k))$('s_'+k).value=s.settings[k];
-const rs=$('rigsel');if(rs.options.length!==s.presets.length){rs.innerHTML=s.presets.map(p=>'<option value="'+p.name+'">'+esc(p.rig)+'</option>').join('');rs.value=s.settings.rig;}
-const cp2=s.presets.find(p=>p.name===s.settings.rig);$('rigwire').textContent=cp2?cp2.wiring:'custom settings';$('rigname').textContent=cp2?cp2.rig:s.settings.rig;$('rxpin').textContent=s.settings.catrx;$('txpin').textContent=s.settings.cattx;
-$('wirings').innerHTML=s.presets.map(p=>'<p class="tag"><b>'+esc(p.rig)+'</b> (<code>rig set '+p.name+'</code>, '+p.proto+', '+p.baud+' Bd): '+esc(p.wiring)+'</p>').join('');
+for(const k of ['catbaud','catrx','cattx','catinv','civaddr','catpoll','catvfo','settle','udpport','wifion','blehold'])if(!dirty.has('s_'+k))$('s_'+k).value=s.settings[k];
+const rs=$('rigsel');const rk=s.rigs.map(r=>r.id+(r.stored?'*':'')).join(',');if(rs.dataset.k!==rk){rs.dataset.k=rk;rs.innerHTML=s.rigs.map(r=>'<option value="'+r.id+'">'+esc(r.name)+(r.stored?' (stored)':'')+'</option>').join('');rs.value=s.settings.rig;}
+const cr=s.rigs.find(r=>r.id===rs.value);$('rigdel').hidden=!(cr&&cr.stored);
+$('rigname').textContent=s.cat.rigname||s.settings.rig;$('rxpin').textContent=s.settings.catrx;$('txpin').textContent=s.settings.cattx;rigWiring(s.settings.rig);
 $('ants').innerHTML=s.ants.map(a=>'<div class="out"><div><div class="n">'+esc(a.name)+(a.name===s.active?' <span class="ok">● active</span>':'')+'</div><div class="t">'+esc(a.type||'')+'</div></div><div class="tag" style="flex:1">'+(s.outs.filter(o=>o.used.includes(a.name)).map(o=>esc(o.name)).join(', ')||'no rules yet')+'</div><div>'+(a.name===s.active?'':'<button class="sm acc" onclick="cmd(\'ant select '+a.name+'\')">activate</button>')+'<button class="sm err" onclick="if(confirm(\'Remove antenna '+a.name+' and its rules?\'))cmd(\'ant del '+a.name+'\')">✕</button></div></div>').join('')||'<span class="tag">no antennas yet</span>';}
+const wireCache={};async function rigWiring(id){if(wireCache[id]===undefined){wireCache[id]='…';try{const d=await (await fetch('/api/rig?id='+encodeURIComponent(id))).json();wireCache[id]=d.wiring||'';}catch(e){wireCache[id]='';}}$('rigwire').textContent=wireCache[id];$('rigwire2').textContent=wireCache[id];}
+function rigExport(){window.open('/api/rig?id='+encodeURIComponent(v('rigsel')),'_blank');}
+async function rigImport(){const t=v('rigjson').trim();if(!t)return;try{JSON.parse(t);}catch(e){log('ERR not valid JSON: '+e.message);return;}log('> rig import …');const r=await fetch('/api/rig',{method:'POST',headers:{'Content-Type':'application/json'},body:t});log(await r.text());if(r.ok){$('rigjson').value='';$('rigimp').hidden=true;}poll();}
+const CATALOG='https://afu.tools/api/v1/antenna-bridge/rigs';
+async function rigCatalog(){const b=$('rigcat');b.hidden=false;$('rigcatinfo').textContent='loading…';try{const d=await (await fetch(CATALOG)).json();const rows=d.rigs||d.profile||[];$('rigcatrows').innerHTML=rows.map(r=>'<tr><td><b>'+esc(r.name)+'</b><br><span class="tag">'+esc(r.id)+(r.wiring?' · '+esc(r.wiring).slice(0,120):'')+'</span></td><td>'+esc(r.family)+'</td><td class="r">'+r.baud+'</td><td>'+esc(r.rufzeichen||r.author||'')+'</td><td class="r"><button class="sm acc" onclick="rigInstall(\''+esc(r.id)+'\')">install</button></td></tr>').join('')||'<tr><td class="tag" colspan="5">no profiles yet</td></tr>';$('rigcatinfo').innerHTML=rows.length+' profiles from <a href="https://afu.tools/antenna-bridge" target="_blank" style="color:var(--acc)">afu.tools/antenna-bridge</a>';}catch(e){$('rigcatinfo').textContent='catalog not reachable (internet needed in the browser): '+e;}}
+async function rigInstall(id){try{const d=await (await fetch(CATALOG+'/'+encodeURIComponent(id))).json();const doc=d.profile||d;log('> install '+id+' from afu.tools');const r=await fetch('/api/rig',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(doc)});log(await r.text());poll();}catch(e){log('ERR '+e);}}
+async function rigShare(){try{const d=await (await fetch('/api/rig?id='+encodeURIComponent(v('rigsel')))).text();window.open('https://afu.tools/antenna-bridge#teilen='+encodeURIComponent(btoa(unescape(encodeURIComponent(d)))),'_blank');}catch(e){log('ERR '+e);}}
 let mapAnt=null,drag=null;
 const FLO=Math.log10(1.5e6),FHI=Math.log10(5e8),MW=1000,LW=110,RH=36,TOP=26;
 const fx=f=>LW+(Math.min(Math.max(Math.log10(Math.max(f,1)),FLO),FHI)-FLO)/(FHI-FLO)*(MW-LW-10);

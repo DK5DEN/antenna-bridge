@@ -40,14 +40,8 @@ struct Rule {
     char     ant[16];       // antenna this rule belongs to, empty = global (every antenna)
 };
 
-// CAT protocol family. Presets in cat.cpp map rig names onto these.
-enum RigProto : uint8_t { PROTO_NONE = 0, PROTO_YAESU = 1, PROTO_KENWOOD = 2, PROTO_ICOM = 3 };
-const char* protoName(uint8_t p);
-bool protoParse(const String& s, uint8_t& p);
-
 struct Settings {
-    char     rig[16]   = "ftx1";        // preset name, informational
-    uint8_t  proto     = PROTO_YAESU;
+    char     rig[24]   = "ftx1";        // id of the rig profile (rig.h)
     int8_t   catRx     = PIN_CAT_RX;
     int8_t   catTx     = PIN_CAT_TX;
     bool     catInvert = false;         // invert UART levels (inverted TTL from a bare RS-232 line driver)

@@ -1,3 +1,4 @@
 firmware/.pio/
 firmware/.vscode/
 __pycache__/
+afutools/api/__pycache__/

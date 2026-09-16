@@ -24,31 +24,11 @@ bool outTypeParse(const String& s, uint8_t& t) {
     return false;
 }
 
-const char* protoName(uint8_t p) {
-    switch (p) {
-        case PROTO_NONE:    return "none";
-        case PROTO_YAESU:   return "yaesu";
-        case PROTO_KENWOOD: return "kenwood";
-        case PROTO_ICOM:    return "icom";
-    }
-    return "?";
-}
-
-bool protoParse(const String& s, uint8_t& p) {
-    String l = s; l.toLowerCase();
-    if (l == "none")    { p = PROTO_NONE;    return true; }
-    if (l == "yaesu")   { p = PROTO_YAESU;   return true; }
-    if (l == "kenwood" || l == "elecraft") { p = PROTO_KENWOOD; return true; }
-    if (l == "icom" || l == "civ") { p = PROTO_ICOM; return true; }
-    return false;
-}
-
 void Settings::load() {
     bool migrated = false;
     prefs.begin(NS, true);
     String r = prefs.getString("rig", "ftx1");
     strlcpy(rig, r.c_str(), sizeof(rig));
-    proto     = prefs.getUChar("proto", PROTO_YAESU);
     catRx     = prefs.getChar("catRx", PIN_CAT_RX);
     catTx     = prefs.getChar("catTx", PIN_CAT_TX);
     catInvert = prefs.getBool("catInv", false);
@@ -130,7 +110,6 @@ void Settings::load() {
     if (catBaud == 0) catBaud = DEF_CAT_BAUD;
     if (catPollMs < 100) catPollMs = 100;
     if (catVfo > 2) catVfo = 0;
-    if (proto > PROTO_ICOM) proto = PROTO_YAESU;
     for (uint8_t i = 0; i < outCount; i++) {
         outs[i].name[sizeof(outs[i].name) - 1] = 0;
         outs[i].host[sizeof(outs[i].host) - 1] = 0;
@@ -149,7 +128,6 @@ void Settings::load() {
 void Settings::save() {
     prefs.begin(NS, false);
     prefs.putString("rig", rig);
-    prefs.putUChar("proto", proto);
     prefs.putChar("catRx", catRx);
     prefs.putChar("catTx", catTx);
     prefs.putBool("catInv", catInvert);

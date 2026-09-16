@@ -12,6 +12,7 @@
 #include "config.h"
 #include "settings.h"
 #include "cat.h"
+#include "rig.h"
 #include "engine.h"
 #include "ble.h"
 #include "commands.h"
@@ -29,7 +30,7 @@ void serialLoop() {
         if (c == '\n') {
             handleCommand(serialLine, Serial);
             serialLine = "";
-        } else if (serialLine.length() < 200) {
+        } else if (serialLine.length() < 4200) {   // rig import carries a JSON document
             serialLine += c;
         }
     }
@@ -77,6 +78,7 @@ void setup() {
     Serial.printf("\n%s %s ready, outs=%u rules=%u wifi=%u catbaud=%lu\n", FW_NAME, FW_VERSION,
                   settings.outCount, settings.ruleCount, settings.wifiCount, (unsigned long)settings.catBaud);
 
+    rig::begin();
     cat::begin();
     ble::begin();
     net::begin();

@@ -3,6 +3,7 @@
 #include "settings.h"
 #include "commands.h"
 #include "cat.h"
+#include "rig.h"
 #include "engine.h"
 #include "ble.h"
 #include "net.h"
@@ -59,7 +60,7 @@ String statusJson() {
     j += "]";
 
     j += ",\"cat\":{\"ok\":" + String(cat::linkOk() ? "true" : "false");
-    j += ",\"rig\":" + q(s.rig) + ",\"proto\":" + q(protoName(s.proto));
+    j += ",\"rig\":" + q(s.rig) + ",\"rigname\":" + q(rig::current().name) + ",\"family\":" + q(rig::familyName(rig::current().family));
     j += ",\"main\":" + String(cat::freqMain());
     j += ",\"sub\":" + String(cat::freqSub());
     j += ",\"tx\":" + String((int)cat::txSide());
@@ -118,19 +119,18 @@ String statusJson() {
     }
     j += "]}";
 
-    uint8_t pc;
-    const cat::Preset* pp = cat::presets(pc);
-    j += ",\"presets\":[";
-    for (uint8_t i = 0; i < pc; i++) {
+    rig::Entry re[24];
+    int rc = rig::list(re, 24);
+    j += ",\"rigs\":[";
+    for (int i = 0; i < rc; i++) {
         if (i) j += ",";
-        j += "{\"name\":" + q(pp[i].name) + ",\"proto\":" + q(protoName(pp[i].proto)) + ",\"baud\":" + String(pp[i].baud);
-        j += ",\"rig\":" + q(pp[i].rigName) + ",\"wiring\":" + q(pp[i].wiring) + "}";
+        j += "{\"id\":" + q(re[i].id) + ",\"name\":" + q(re[i].name) + ",\"family\":" + q(rig::familyName(re[i].family));
+        j += ",\"baud\":" + String(re[i].baud) + ",\"stored\":" + String(re[i].stored ? "true" : "false") + "}";
     }
     j += "]";
 
     j += ",\"settings\":{";
     j += "\"rig\":" + q(s.rig);
-    j += ",\"proto\":" + q(protoName(s.proto));
     j += ",\"catrx\":" + String(s.catRx);
     j += ",\"cattx\":" + String(s.catTx);
     j += ",\"catinv\":" + String(s.catInvert ? 1 : 0);
@@ -210,6 +210,25 @@ void handleScan() {
     server.send(200, "application/json", j);
 }
 
+// GET /api/rig?id=<id>: the profile document. POST /api/rig with the JSON
+// document as body: store it.
+void handleRigGet() {
+    String id = server.arg("id");
+    if (!id.length()) id = settings.rig;
+    String doc = rig::document(id);
+    if (!doc.length()) { server.send(404, "text/plain", "unknown rig"); return; }
+    server.sendHeader("Cache-Control", "no-store");
+    server.send(200, "application/json", doc);
+}
+
+void handleRigPost() {
+    String body = server.arg("plain");
+    if (!body.length()) body = server.arg("doc");
+    String err;
+    if (!rig::import(body, err)) { server.send(400, "text/plain", "ERR " + err); return; }
+    server.send(200, "text/plain", "OK stored");
+}
+
 void handleNotFound() {
     if (net::apActive() && !net::staConnected()) {
         server.sendHeader("Location", "http://" + WiFi.softAPIP().toString() + "/", true);
@@ -235,6 +254,8 @@ void begin() {
     server.on("/api/cmd", HTTP_POST, handleCmd);
     server.on("/api/wifi", HTTP_POST, handleWifi);
     server.on("/api/scan", HTTP_GET, handleScan);
+    server.on("/api/rig", HTTP_GET, handleRigGet);
+    server.on("/api/rig", HTTP_POST, handleRigPost);
     server.onNotFound(handleNotFound);
     server.begin();
 }
