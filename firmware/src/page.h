@@ -323,6 +323,7 @@ let mxAnt=null;const mxExtra={};
 function mxKey(r){return r.fmin+'-'+r.fmax;}
 function mxRow(a,b){a=Math.round(a);b=Math.round(b);if(!a||!b||a>b)return;const k=mxAnt||'-';(mxExtra[k]=mxExtra[k]||{})[a+'-'+b]=[a,b];renderMatrix(S);}
 function mxCell(ant,out,a,b){const r=S.rules.map((x,i)=>[x,i]).find(x=>x[0].ant===(ant==='-'?'':ant)&&x[0].out===out&&x[0].fmin===a&&x[0].fmax===b);
+(mxExtra[ant]=mxExtra[ant]||{})[a+'-'+b]=[a,b];
 if(!r)cmd('rule add '+ant+' '+out+' '+a+' '+b+' on');else if(r[0].on)cmd('rule set '+r[1]+' '+a+' '+b+' off');else cmd('rule del '+r[1]);}
 function mxDelRow(ant,a,b){const idx=S.rules.map((x,i)=>[x,i]).filter(x=>x[0].ant===(ant==='-'?'':ant)&&x[0].fmin===a&&x[0].fmax===b).map(x=>x[1]).sort((x,y)=>y-x);(async()=>{for(const i of idx)await cmd('rule del '+i);const k=ant;if(mxExtra[k])delete mxExtra[k][a+'-'+b];poll();})();}
 function renderMatrix(s){if(!s.ants.length&&!s.outs.length){$('mxhead').innerHTML='';$('mxbody').innerHTML='<tr><td class="tag">add antennas and outputs first</td></tr>';$('mxants').innerHTML='';return;}
