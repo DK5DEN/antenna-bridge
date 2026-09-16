@@ -53,7 +53,7 @@ pre{background:var(--bg2);border:1px solid var(--line);border-radius:9px;padding
 .out .n{font-weight:600;min-width:90px}.out .t{font-size:.7rem;color:var(--mut);text-transform:uppercase;letter-spacing:.06em}.out .st{min-width:60px}
 .dot{display:inline-block;width:10px;height:10px;border-radius:50%;background:var(--line);margin-right:6px;vertical-align:middle}.dot.on{background:var(--ok)}.dot.off{background:color-mix(in srgb,var(--mut) 50%,transparent)}.dot.bad{background:var(--err)}
 #flow{width:100%;display:block}#flow text{font:12px "Inter",system-ui,sans-serif;fill:var(--fg)}#flow .sub{font-size:10px;fill:var(--mut)}#flow .node{fill:var(--bg2);stroke:var(--line);stroke-width:1}#flow .node.act{stroke:var(--ok);stroke-width:2}#flow .node.dim{opacity:.5}#flow .node.click{cursor:pointer}#flow foreignObject select{background:var(--field);color:var(--fg);border:1px solid var(--line);border-radius:8px;font:12px "Inter",system-ui,sans-serif}#flow .edge{fill:none;stroke:var(--line);stroke-width:2}#flow .edge.on{stroke:var(--ok)}#flow .edge.off{stroke:var(--err)}#flow .edge.glob{stroke-dasharray:5 4}#flow .lbl{font-size:10px;fill:var(--mut)}#flow .lbl.on{fill:var(--ok)}#flow .lbl.off{fill:var(--err)}
-.mx{font-size:.86rem}.mx td,.mx th{text-align:center;padding:4px 6px}.mx td.f,.mx th.f{text-align:left;white-space:nowrap}.mx .c{cursor:pointer;border-radius:999px;padding:0 4px;height:var(--hs);min-width:52px;display:inline-flex;align-items:center;justify-content:center;background:var(--bg2);border:1px solid var(--line);color:var(--mut);font-size:.76rem;font-weight:600}.mx .c.on{background:color-mix(in srgb,var(--ok) 15%,transparent);border-color:color-mix(in srgb,var(--ok) 45%,transparent);color:var(--ok)}.mx .c.off{background:color-mix(in srgb,var(--err) 15%,transparent);border-color:color-mix(in srgb,var(--err) 45%,transparent);color:var(--err)}.mx tr.cur td{background:var(--card-hover)}
+.mx{font-size:.86rem}.mx td,.mx th{text-align:center;padding:4px 6px}.mx td.f,.mx th.f{text-align:left;white-space:nowrap}.mx .c{cursor:pointer;border-radius:999px;padding:0 4px;height:var(--hs);min-width:52px;display:inline-flex;align-items:center;justify-content:center;background:var(--bg2);border:1px solid var(--line);color:var(--mut);font-size:.76rem;font-weight:600}.mx .c.on{background:color-mix(in srgb,var(--ok) 15%,transparent);border-color:color-mix(in srgb,var(--ok) 45%,transparent);color:var(--ok)}.mx .c.off{color:var(--mut)}.mx tr.cur td{background:var(--card-hover)}
 #map .bar.off{fill:color-mix(in srgb,var(--err) 55%,transparent);stroke:var(--err)}
 dialog{background:var(--bg2);color:var(--fg);border:1px solid var(--line);border-radius:var(--radius);padding:1.1rem 1.2rem;width:min(92vw,520px);box-shadow:var(--shadow)}dialog::backdrop{background:rgba(5,8,20,.6);backdrop-filter:blur(3px)}dialog h2{font-size:1.05rem;margin:0 0 .8rem;letter-spacing:-.01em}
 #toasts{position:fixed;right:18px;bottom:18px;display:flex;flex-direction:column;gap:8px;z-index:9}.toast{border-left:3px solid var(--acc);background:var(--bg2);border:1px solid var(--line);border-left-width:3px;border-radius:0 8px 8px 0;padding:.6rem .9rem;font-size:.86rem;box-shadow:var(--shadow);max-width:min(420px,90vw);animation:tin .15s ease}.toast.ok{border-left-color:var(--ok)}.toast.bad{border-left-color:var(--err)}@keyframes tin{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
@@ -117,7 +117,7 @@ dialog{background:var(--bg2);color:var(--fg);border:1px solid var(--line);border
 <section class="card full">
 <h2>Switching matrix</h2>
 <div class="row" id="mxants"></div>
-<p class="tag">Rows are frequency ranges, columns are the outputs. Click a cell: <b>–</b> (no rule) → <b class="ok">ON</b> → <b class="bad">OFF</b> → –. ON means the output is active in that range, OFF forces it off even if a wider ON rule covers the frequency. Relays and GPIO switch accordingly, UDP and line targets receive <code>freq</code> only while ON. Only the rules of the active antenna and the global ones act.</p>
+<p class="tag">Rows are frequency ranges, columns are the outputs. A cell shows what the output does in that range with this antenna, click toggles it. Relays and GPIO switch accordingly, UDP and line targets receive <code>freq</code> only while ON. Only the rules of the active antenna and the global ones act.</p>
 <div style="overflow:auto"><table class="mx"><thead id="mxhead"></thead><tbody id="mxbody"></tbody></table></div>
 <div class="row"><label style="margin:0">Add range</label><span id="mxbands"></span><input id="mxmin" type="number" step="0.1" placeholder="from kHz" style="width:110px"><input id="mxmax" type="number" step="0.1" placeholder="to kHz" style="width:110px"><button class="acc" onclick="mxRow(v('mxmin')*1000,v('mxmax')*1000)">Add</button></div>
 </section>
@@ -359,7 +359,7 @@ let link='';if(o.type==='relay')link=(o.link?'linked':'no link')+(o.batt?' · '+
 // icon and label show the real state of the device; the rule only explains it
 let act=-1,pend='';if(o.type==='relay'){act=o.state;if(o.want>=0&&o.want!==o.state)pend=' → '+(o.want?'on':'off')+' pending';}else if(o.type==='line'){act=o.state===1?(o.match?1:0):-1;}else{act=o.match?1:0;}
 const forced=d.st==='off';
-const stTxt=act===1?'<tspan fill="#10b981">ON</tspan>':(act===0?(forced?'<tspan fill="#ef4444">OFF (forced)</tspan>':'<tspan fill="#8a93b3">off</tspan>'):'<tspan fill="#8a93b3">unknown</tspan>')+(pend?'<tspan fill="#f59e0b">'+pend+'</tspan>':'');
+const stTxt=act===1?'<tspan fill="#10b981">ON</tspan>':(act===0?'<tspan fill="#8a93b3">off</tspan>':'<tspan fill="#8a93b3">unknown</tspan>')+(pend?'<tspan fill="#f59e0b">'+pend+'</tspan>':'');
 const why=d.by?((d.by.fmax>=999e6?'always':khz(d.by.fmin)+'–'+khz(d.by.fmax)+' kHz')+(glob?' (global)':'')+(d.st==='on'?' → on':' → off')):'no rule for this frequency';
 const ico=act===1?'<path d="M5 12.5l4.5 4.5L19 7.5" stroke="#10b981" stroke-width="2.4"/>':(act===0&&forced?'<circle cx="12" cy="12" r="8" stroke="#ef4444" stroke-width="2"/><path d="M6.5 6.5l11 11" stroke="#ef4444" stroke-width="2"/>':'<circle cx="12" cy="12" r="8" stroke="#8a93b3" stroke-width="1.8"/><path d="M8.5 12h7" stroke="#8a93b3" stroke-width="1.8"/>');
 g+='<rect class="node" x="'+outX+'" y="'+y+'" width="'+outW+'" height="40" rx="8"/><g transform="translate('+(outX+8)+','+(y+9)+') scale(.9)" fill="none" stroke-linecap="round" stroke-linejoin="round">'+ico+'</g><text x="'+(outX+34)+'" y="'+(y+17)+'">'+esc(o.name)+' <tspan class="sub">'+o.type+'</tspan>   '+stTxt+'</text><text class="sub" x="'+(outX+34)+'" y="'+(y+32)+'">'+link+' · '+why+'</text>';
@@ -370,9 +370,19 @@ function bandSel(minId,maxId){return '<select style="width:150px" onchange="if(t
 let mxAnt=null;const mxExtra={};
 function mxKey(r){return r.fmin+'-'+r.fmax;}
 function mxRow(a,b){a=Math.round(a);b=Math.round(b);if(!a||!b||a>b)return;const k=mxAnt||'-';(mxExtra[k]=mxExtra[k]||{})[a+'-'+b]=[a,b];renderMatrix(S);}
-function mxCell(ant,out,a,b){const r=S.rules.map((x,i)=>[x,i]).find(x=>x[0].ant===(ant==='-'?'':ant)&&x[0].out===out&&x[0].fmin===a&&x[0].fmax===b);
-(mxExtra[ant]=mxExtra[ant]||{})[a+'-'+b]=[a,b];
-if(!r)cmd('rule add '+ant+' '+out+' '+a+' '+b+' on');else if(r[0].on)cmd('rule set '+r[1]+' '+a+' '+b+' off');else cmd('rule del '+r[1]);}
+// state of an output inside a range: ON when an ON rule of that antenna (or a global one) covers
+// the whole range and no OFF rule touches it. Checked at the range middle.
+function mxState(s,ant,out,a,b){const an=ant==='-'?'':ant;const f=Math.round((a+b)/2);const rs=s.rules.filter(r=>r.out===out&&(r.ant===an||r.ant==='')&&f>=r.fmin&&f<=r.fmax);if(rs.some(r=>!r.on))return 0;return rs.some(r=>r.on)?1:0;}
+// toggle: an output is either on or off in a range. Turning off removes the own ON rule for the
+// range; if a wider ON rule still covers it, an OFF rule for the range is added instead. Turning on
+// removes an own OFF rule; if nothing covers the range afterwards, an ON rule is added.
+function mxCell(ant,out,a,b){const an=ant==='-'?'':ant;(mxExtra[ant]=mxExtra[ant]||{})[a+'-'+b]=[a,b];
+const own=S.rules.map((x,i)=>[x,i]).find(x=>x[0].ant===an&&x[0].out===out&&x[0].fmin===a&&x[0].fmax===b);
+const on=mxState(S,ant,out,a,b)===1;
+const rest=S.rules.filter(x=>!(own&&x===own[0]));const f=Math.round((a+b)/2);
+const otherOn=rest.some(r=>r.out===out&&(r.ant===an||r.ant==='')&&r.on&&f>=r.fmin&&f<=r.fmax);
+(async()=>{if(on){if(own&&own[0].on)await cmd('rule del '+own[1],true);if(otherOn)await cmd('rule add '+ant+' '+out+' '+a+' '+b+' off',true);toast(out+' off in this range','ok');}
+else{if(own&&!own[0].on)await cmd('rule del '+own[1],true);if(!otherOn)await cmd('rule add '+ant+' '+out+' '+a+' '+b+' on',true);toast(out+' on in this range','ok');}poll();})();}
 function mxDelRow(ant,a,b){const idx=S.rules.map((x,i)=>[x,i]).filter(x=>x[0].ant===(ant==='-'?'':ant)&&x[0].fmin===a&&x[0].fmax===b).map(x=>x[1]).sort((x,y)=>y-x);(async()=>{for(const i of idx)await cmd('rule del '+i);const k=ant;if(mxExtra[k])delete mxExtra[k][a+'-'+b];poll();})();}
 function renderMatrix(s){if(!s.ants.length&&!s.outs.length){$('mxhead').innerHTML='';$('mxbody').innerHTML='<tr><td class="tag">add antennas and outputs first</td></tr>';$('mxants').innerHTML='';return;}
 if(!mxAnt||!(mxAnt==='-'||s.ants.some(a=>a.name===mxAnt)))mxAnt=s.active||(s.ants[0]&&s.ants[0].name)||'-';
@@ -381,8 +391,8 @@ const ant=mxAnt==='-'?'':mxAnt;const rows={};s.rules.filter(r=>r.ant===ant).forE
 const keys=Object.keys(rows).sort((x,y)=>rows[x][0]-rows[y][0]);
 $('mxhead').innerHTML='<tr><th class="f">range</th>'+s.outs.map(o=>'<th>'+esc(o.name)+'<br><span class="tag" style="font-size:10px">'+o.type+'</span></th>').join('')+'<th></th></tr>';
 $('mxbody').innerHTML=keys.map(k=>{const [a,b]=rows[k];const band=BANDS.find(x=>x[1]*1000===a&&x[2]*1000===b);const cur=s.freq&&s.freq>=a&&s.freq<=b;
-return '<tr'+(cur?' class="cur"':'')+'><td class="f"><b>'+(band?band[0]:'')+'</b> '+(b>=999e6?'always':khz(a)+' – '+khz(b)+' kHz')+'</td>'+s.outs.map(o=>{const r=s.rules.find(x=>x.ant===ant&&x.out===o.name&&x.fmin===a&&x.fmax===b);const st=r?(r.on?'on':'off'):'';
-return '<td><span class="c '+st+'" onclick="mxCell(\''+mxAnt+'\',\''+esc(o.name)+'\','+a+','+b+')">'+(st?st.toUpperCase():'–')+'</span></td>';}).join('')+'<td><button class="ico weg" title="Remove range" onclick="mxDelRow(\''+mxAnt+'\','+a+','+b+')">'+ICO_WEG+'</button></td></tr>';}).join('')||'<tr><td class="tag" colspan="'+(s.outs.length+2)+'">no ranges yet, add one below</td></tr>';
+return '<tr'+(cur?' class="cur"':'')+'><td class="f"><b>'+(band?band[0]:'')+'</b> '+(b>=999e6?'always':khz(a)+' – '+khz(b)+' kHz')+'</td>'+s.outs.map(o=>{const st=mxState(s,mxAnt,o.name,a,b)===1?'on':'off';
+return '<td><span class="c '+st+'" onclick="mxCell(\''+mxAnt+'\',\''+esc(o.name)+'\','+a+','+b+')">'+st.toUpperCase()+'</span></td>';}).join('')+'<td><button class="ico weg" title="Remove range" onclick="mxDelRow(\''+mxAnt+'\','+a+','+b+')">'+ICO_WEG+'</button></td></tr>';}).join('')||'<tr><td class="tag" colspan="'+(s.outs.length+2)+'">no ranges yet, add one below</td></tr>';
 if(!$('mxbands').innerHTML)$('mxbands').innerHTML=bandSel('mxmin','mxmax');}
 let mapAnt=null,drag=null;
 const FLO=Math.log10(1.5e6),FHI=Math.log10(5e8),MW=1000,LW=110,RH=36,TOP=26;
