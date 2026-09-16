@@ -57,7 +57,7 @@ pre{background:var(--bg2);border:1px solid var(--line);border-radius:9px;padding
 #map .bar.off{fill:color-mix(in srgb,var(--err) 55%,transparent);stroke:var(--err)}
 dialog{background:var(--bg2);color:var(--fg);border:1px solid var(--line);border-radius:var(--radius);padding:1.1rem 1.2rem;width:min(92vw,520px);box-shadow:var(--shadow)}dialog::backdrop{background:rgba(5,8,20,.6);backdrop-filter:blur(3px)}dialog h2{font-size:1.05rem;margin:0 0 .8rem;letter-spacing:-.01em}
 #toasts{position:fixed;right:18px;bottom:18px;display:flex;flex-direction:column;gap:8px;z-index:9}.toast{border-left:3px solid var(--acc);background:var(--bg2);border:1px solid var(--line);border-left-width:3px;border-radius:0 8px 8px 0;padding:.6rem .9rem;font-size:.86rem;box-shadow:var(--shadow);max-width:min(420px,90vw);animation:tin .15s ease}.toast.ok{border-left-color:var(--ok)}.toast.bad{border-left-color:var(--err)}@keyframes tin{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
-.chip{display:inline-flex;align-items:center;height:var(--hs);padding:0 .8rem;border-radius:999px;border:1px solid var(--line);background:var(--bg2);cursor:pointer;font-size:.84rem;margin:0;color:var(--mut)}#mapants,#mxants,#rigchips{display:inline-flex;flex-wrap:wrap;gap:6px}.chip:hover{border-color:var(--acc);color:var(--fg)}.chip.on{background:var(--card-hover);color:var(--fg);border-color:var(--acc)}.chip.act{box-shadow:0 0 0 2px color-mix(in srgb,var(--ok) 55%,transparent)}
+.chip{display:inline-flex;align-items:center;height:var(--hs);padding:0 .8rem;border-radius:999px;border:1px solid var(--line);background:var(--bg2);cursor:pointer;font-size:.84rem;margin:0;color:var(--mut)}#rigchips{display:inline-flex;flex-wrap:wrap;gap:6px}.chip:hover{border-color:var(--acc);color:var(--fg)}.chip.on{background:var(--card-hover);color:var(--fg);border-color:var(--acc)}.chip.act{box-shadow:0 0 0 2px color-mix(in srgb,var(--ok) 55%,transparent)}
 #map{width:100%;touch-action:none;user-select:none;display:block}#map text{font:11px "Inter",system-ui,sans-serif;fill:var(--mut)}#map .band{fill:color-mix(in srgb,var(--fg) 4%,transparent)}#map .bandl{fill:var(--mut);font-size:10px}#map .row{fill:color-mix(in srgb,var(--fg) 3%,transparent)}#map .rowl{fill:var(--fg);font-size:12px}
 #map .bar{fill:color-mix(in srgb,var(--acc) 60%,transparent);stroke:var(--acc);stroke-width:1;cursor:grab}#map .bar.inact{fill:color-mix(in srgb,var(--mut) 33%,transparent);stroke:var(--mut)}#map .bar.hit{fill:color-mix(in srgb,var(--ok) 75%,transparent);stroke:var(--ok)}#map .hnd{fill:transparent;cursor:ew-resize}#map .cur{stroke:var(--err);stroke-width:1.5}#map .del{fill:var(--err);font-size:11px;cursor:pointer}
 </style></head><body>
@@ -105,9 +105,8 @@ dialog{background:var(--bg2);color:var(--fg);border:1px solid var(--line);border
 <!-- ===== Map ===== -->
 <div class="view" id="v-map">
 <section class="card full">
-<h2>Frequency map</h2>
-<div class="row" id="mapants"></div>
-<p class="tag">Rows are the outputs, bars are the rules of the selected antenna on a logarithmic frequency axis with the amateur bands shaded. Drag a bar to move it, drag its edges to change the range, click into a band on an empty spot to add a rule for that band (click outside the bands for a narrow rule), ✕ removes a rule. The red line is the current frequency; green bars are the rules that currently match. Changes are stored immediately.</p>
+<h2>Antenna overview</h2>
+<p class="tag">One row per antenna, the ranges it covers on a logarithmic frequency axis with the amateur bands shaded: <span class="pill warn">direct</span> without a tuner (from the antenna editor), <span class="pill" style="color:var(--acc);border-color:var(--acc)">outputs</span> where its rules switch relays or other outputs on, labelled with them. The active antenna is highlighted, click a name to activate it. The red line is the current frequency. Edit the ranges in the Matrix or the antenna editor.</p>
 <svg id="map" viewBox="0 0 1000 100" preserveAspectRatio="none"></svg>
 </section>
 </div>
@@ -116,7 +115,7 @@ dialog{background:var(--bg2);color:var(--fg);border:1px solid var(--line);border
 <div class="view" id="v-matrix">
 <section class="card full">
 <h2>Switching matrix</h2>
-<div class="row" id="mxants"></div>
+<div class="row"><label style="margin:0">Antenna</label><select id="mxsel" style="width:220px" onchange="mxAnt=this.value;renderMatrix(S)"></select><span class="tag" id="mxinfo"></span></div>
 <p class="tag">Rows are the frequency ranges with rules plus the ranges the antenna works on without a tuner (<span class="pill ok">direct</span>, set in the antenna editor); columns are the outputs this antenna uses — add the ones it needs below, the trash icon in a column removes the output and its rules for this antenna. A cell shows what the output does in that range with this antenna, click toggles it. Relays and GPIO switch accordingly, UDP and line targets receive <code>freq</code> only while ON. Only the rules of the active antenna and the global ones act.</p>
 <div style="overflow:auto"><table class="mx"><thead id="mxhead"></thead><tbody id="mxbody"></tbody></table></div>
 <div class="row" id="mxcolrow"></div>
@@ -309,7 +308,7 @@ $('outtip').textContent=s.blebusy?'Bluetooth operation running…':'';
 $('scanst').textContent=s.scan.running?'scanning…':(s.scan.hits.length?s.scan.hits.length+' devices':'');
 $('scan').innerHTML=s.scan.hits.map(h=>'<tr><td><code>'+h.addr+'</code></td><td>'+(h.atype?'random':'public')+'</td><td>'+esc(h.name)+'</td><td>'+(h.kind===1?'<span class="ok">BR1 relay</span>':(h.kind===2?'<span class="ok">line target</span>':'other'))+'</td><td class="r">'+h.rssi+'</td><td class="r"><button class="sm" onclick="useAddr(\''+h.addr+'\','+h.atype+','+h.kind+')">use</button></td></tr>').join('')||'<tr><td class="tag" colspan="6">no scan result</td></tr>';
 $('addrlist').innerHTML=s.scan.hits.map(h=>'<option value="'+h.addr+'">'+esc(h.name)+'</option>').join('');
-renderRules(s);renderMatrix(s);renderFlow(s);if(!drag)renderMap(s);
+renderRules(s);renderMatrix(s);renderFlow(s);renderMap(s);
 const w=s.wifi;$('net').innerHTML=w.mode==='sta'?esc(w.ssid)+' · '+w.ip+' · '+w.rssi+' dBm':(w.mode==='ap'?'AP '+w.ap_ssid+' · '+w.ap_ip:w.mode);
 $('wifiinfo').innerHTML=(w.mode==='sta'?'Connected to <b>'+esc(w.ssid)+'</b> as '+w.ip+' ('+w.rssi+' dBm), <a href="http://'+w.hostname+'/" style="color:var(--acc)">http://'+w.hostname+'</a>':'Not connected to a network')+(w.ap?'<br>Access point <b>'+w.ap_ssid+'</b> active at '+w.ap_ip:'');
 $('apssid').textContent=w.ap_ssid;$('appass').textContent=w.ap_pass;$('host').textContent=w.hostname;$('fw').textContent=s.fw;$('uptime').textContent=fmtUp(s.uptime);$('udpp').textContent=s.settings.udpport;$('udpp2').textContent=s.settings.udpport;
@@ -387,9 +386,9 @@ const otherOn=rest.some(r=>r.out===out&&(r.ant===an||r.ant==='')&&r.on&&f>=r.fmi
 (async()=>{if(on){if(own&&own[0].on)await cmd('rule del '+own[1],true);if(otherOn)await cmd('rule add '+ant+' '+out+' '+a+' '+b+' off',true);toast(out+' off in this range','ok');}
 else{if(own&&!own[0].on)await cmd('rule del '+own[1],true);if(!otherOn)await cmd('rule add '+ant+' '+out+' '+a+' '+b+' on',true);toast(out+' on in this range','ok');}poll();})();}
 function mxDelRow(ant,a,b){const idx=S.rules.map((x,i)=>[x,i]).filter(x=>x[0].ant===(ant==='-'?'':ant)&&x[0].fmin===a&&x[0].fmax===b).map(x=>x[1]).sort((x,y)=>y-x);(async()=>{for(const i of idx)await cmd('rule del '+i);const k=ant;if(mxExtra[k])delete mxExtra[k][a+'-'+b];poll();})();}
-function renderMatrix(s){if(!s.ants.length&&!s.outs.length){$('mxhead').innerHTML='';$('mxbody').innerHTML='<tr><td class="tag">add antennas and outputs first</td></tr>';$('mxants').innerHTML='';return;}
+function renderMatrix(s){if(!s.ants.length&&!s.outs.length){$('mxhead').innerHTML='';$('mxbody').innerHTML='<tr><td class="tag">add antennas and outputs first</td></tr>';$('mxsel').innerHTML='';$('mxinfo').innerHTML='';return;}
 if(!mxAnt||!(mxAnt==='-'||s.ants.some(a=>a.name===mxAnt)))mxAnt=s.active||(s.ants[0]&&s.ants[0].name)||'-';
-$('mxants').innerHTML=s.ants.map(a=>'<span class="chip'+(a.name===mxAnt?' on':'')+(a.name===s.active?' act':'')+'" onclick="mxAnt=\''+a.name+'\';renderMatrix(S)">'+esc(a.name)+'</span>').join('')+'<span class="chip'+(mxAnt==='-'?' on':'')+'" onclick="mxAnt=\'-\';renderMatrix(S)">global</span>';
+const msel=$('mxsel');const mk=s.ants.map(a=>a.name).join(',');if(msel.dataset.k!==mk){msel.dataset.k=mk;msel.innerHTML=s.ants.map(a=>'<option value="'+esc(a.name)+'">'+esc(a.name)+(a.type?' ('+esc(a.type)+')':'')+'</option>').join('')+'<option value="-">global (every antenna)</option>';}msel.value=mxAnt;$('mxinfo').innerHTML=mxAnt==='-'?'rules here act with every antenna':(mxAnt===s.active?'<span class="ok">active antenna</span>':'<button class="sm" onclick="cmd(\'ant select '+esc(mxAnt)+'\')">activate</button>');
 const ant=mxAnt==='-'?'':mxAnt;const rows={};const aO=s.ants.find(x=>x.name===mxAnt);const direct={};(aO?aO.bands:[]).forEach(b=>{rows[b[0]+'-'+b[1]]=[b[0],b[1]];direct[b[0]+'-'+b[1]]=1;});s.rules.filter(r=>r.ant===ant).forEach(r=>{rows[mxKey(r)]=[r.fmin,r.fmax];});Object.assign(rows,mxExtra[mxAnt]||{});
 const keys=Object.keys(rows).sort((x,y)=>rows[x][0]-rows[y][0]);
 const cols=s.outs.filter(o=>s.rules.some(r=>r.ant===ant&&r.out===o.name)||(mxCols[mxAnt]&&mxCols[mxAnt].has(o.name)));const free=s.outs.filter(o=>!cols.includes(o));
@@ -399,30 +398,22 @@ $('mxbody').innerHTML=keys.map(k=>{const [a,b]=rows[k];const band=BANDS.find(x=>
 return '<tr'+(cur?' class="cur"':'')+'><td class="f"><b>'+(band?band[0]:'')+'</b> '+(b>=999e6?'always':khz(a)+' – '+khz(b)+' kHz')+(direct[k]?' <span class="pill ok" title="the antenna works here without a tuner">direct</span>':'')+'</td>'+cols.map(o=>{const st=mxState(s,mxAnt,o.name,a,b)===1?'on':'off';
 return '<td><span class="c '+st+'" onclick="mxCell(\''+mxAnt+'\',\''+esc(o.name)+'\','+a+','+b+')">'+st.toUpperCase()+'</span></td>';}).join('')+'<td><button class="ico weg" title="Remove range" onclick="mxDelRow(\''+mxAnt+'\','+a+','+b+')">'+ICO_WEG+'</button></td></tr>';}).join('')||'<tr><td class="tag" colspan="'+(cols.length+2)+'">'+(cols.length?'no ranges yet, add one below':'add the outputs this antenna needs, then ranges')+'</td></tr>';
 if(!$('mxbands').innerHTML)$('mxbands').innerHTML=bandSel('mxmin','mxmax');}
-let mapAnt=null,drag=null;
-const FLO=Math.log10(1.5e6),FHI=Math.log10(5e8),MW=1000,LW=110,RH=36,TOP=26;
+const FLO=Math.log10(1.5e6),FHI=Math.log10(5e8),MW=1000,LW=130,RH=52,TOP=26;
 const fx=f=>LW+(Math.min(Math.max(Math.log10(Math.max(f,1)),FLO),FHI)-FLO)/(FHI-FLO)*(MW-LW-10);
-const xf=x=>Math.round(Math.pow(10,FLO+(Math.min(Math.max(x,LW),MW-10)-LW)/(MW-LW-10)*(FHI-FLO)));
-function svgPt(ev){const m=$('map'),r=m.getBoundingClientRect();return{x:(ev.clientX-r.left)/r.width*MW,y:(ev.clientY-r.top)/r.height*m.viewBox.baseVal.height};}
-function bandAt(f){return BANDS.find(b=>f>=b[1]*1000&&f<=b[2]*1000);}
-function renderMap(s){if(!s.ants.length){$('map').setAttribute('viewBox','0 0 1000 40');$('map').innerHTML='<text x="20" y="25">add an antenna first</text>';$('mapants').innerHTML='';return;}
-if(!mapAnt||!(mapAnt==='-'||s.ants.some(a=>a.name===mapAnt)))mapAnt=s.active||s.ants[0].name;
-$('mapants').innerHTML=s.ants.map(a=>'<span class="chip'+(a.name===mapAnt?' on':'')+(a.name===s.active?' act':'')+'" onclick="mapAnt=\''+a.name+'\';renderMap(S)">'+esc(a.name)+(a.type?' <small>'+esc(a.type)+'</small>':'')+'</span>').join('')+'<span class="chip'+(mapAnt==='-'?' on':'')+'" onclick="mapAnt=\'-\';renderMap(S)">global</span>'+(mapAnt!=='-'&&mapAnt!==s.active?' <button class="sm acc" onclick="cmd(\'ant select '+mapAnt+'\')">activate '+esc(mapAnt)+'</button>':'');
-const ant=mapAnt==='-'?'':mapAnt;const outs=s.outs;const aObj=s.ants.find(x=>x.name===ant);const dirRow=aObj&&aObj.bands.length?1:0;const H=TOP+(outs.length+dirRow)*RH+8;const m=$('map');m.setAttribute('viewBox','0 0 1000 '+H);
+// ranges where an antenna's rules switch something on: every ON rule of the antenna that no OFF rule covers,
+// merged per range with the names of the outputs that are on there
+function antOutRanges(s,ant){const on=s.rules.filter(r=>r.ant===ant&&r.on);const out={};on.forEach(r=>{const f=Math.round((r.fmin+r.fmax)/2);if(s.rules.some(o=>o.ant===ant&&!o.on&&o.out===r.out&&f>=o.fmin&&f<=o.fmax))return;const k=r.fmin+'-'+r.fmax;(out[k]=out[k]||{a:r.fmin,b:r.fmax,outs:[]}).outs.push(r.out);});return Object.values(out);}
+function renderMap(s){const m=$('map');if(!s.ants.length){m.setAttribute('viewBox','0 0 1000 40');m.innerHTML='<text x="20" y="25">add an antenna first</text>';return;}
+const H=TOP+s.ants.length*RH+8;m.setAttribute('viewBox','0 0 1000 '+H);
 let g='';BANDS.forEach(b=>{const x1=fx(b[1]*1000),x2=fx(b[2]*1000);g+='<rect class="band" x="'+x1+'" y="'+TOP+'" width="'+Math.max(x2-x1,2)+'" height="'+(H-TOP-8)+'"/><text class="bandl" x="'+((x1+x2)/2)+'" y="'+(TOP-8)+'" text-anchor="middle">'+b[0]+'</text>';});
-if(dirRow){const y=TOP;g+='<text class="rowl" x="8" y="'+(y+RH/2+1)+'">'+esc(ant)+'</text><text x="8" y="'+(y+RH/2+13)+'" style="font-size:9px">direct, no tuner</text>';aObj.bands.forEach(b=>{const x1=fx(b[0]),x2=Math.max(fx(b[1]),x1+4);g+='<rect x="'+x1+'" y="'+(y+6)+'" width="'+(x2-x1)+'" height="'+(RH-16)+'" rx="3" fill="#f59e0b55" stroke="#f59e0b"/>';});}
-outs.forEach((o,i0)=>{const i=i0+dirRow;const y=TOP+i*RH;g+='<rect class="row" x="'+LW+'" y="'+y+'" width="'+(MW-LW-10)+'" height="'+(RH-4)+'" data-out="'+esc(o.name)+'"/><text class="rowl" x="8" y="'+(y+RH/2+1)+'">'+esc(o.name)+'</text><text x="8" y="'+(y+RH/2+13)+'" style="font-size:9px">'+o.type+'</text>';
-s.rules.forEach((r,ri)=>{if(r.ant!==ant||r.out!==o.name)return;const x1=fx(r.fmin),x2=Math.max(fx(r.fmax),x1+6);const hit=s.freq&&r.active&&r.on&&s.freq>=r.fmin&&s.freq<=r.fmax;
-g+='<g data-rule="'+ri+'"><rect class="bar'+(r.on?'':' off')+(hit?' hit':(r.active?'':' inact'))+'" x="'+x1+'" y="'+(y+4)+'" width="'+(x2-x1)+'" height="'+(RH-12)+'" rx="3"/><rect class="hnd" data-edge="l" x="'+(x1-4)+'" y="'+(y+4)+'" width="8" height="'+(RH-12)+'"/><rect class="hnd" data-edge="r" x="'+(x2-4)+'" y="'+(y+4)+'" width="8" height="'+(RH-12)+'"/><text class="del" x="'+(x2-9)+'" y="'+(y+RH/2+1)+'" data-del="'+ri+'">✕</text>'+((x2-x1)>60?'<text x="'+(x1+4)+'" y="'+(y+RH/2+1)+'" style="fill:var(--fg);font-size:10px;pointer-events:none">'+(r.fmax>=999e6?'always':khz(r.fmin)+'–'+khz(r.fmax))+'</text>':'')+'</g>';});});
+s.ants.forEach((a,i)=>{const y=TOP+i*RH;const act=a.name===s.active;
+g+='<rect class="row" x="'+LW+'" y="'+y+'" width="'+(MW-LW-10)+'" height="'+(RH-4)+'"'+(act?' style="fill:color-mix(in srgb,var(--ok) 8%,transparent)"':'')+'/>';
+g+='<g style="cursor:pointer" onclick="cmd(\'ant select '+a.name+'\')"><text class="rowl" x="8" y="'+(y+RH/2-2)+'"'+(act?' style="fill:var(--ok)"':'')+'>'+esc(a.name)+(act?' ●':'')+'</text><text x="8" y="'+(y+RH/2+11)+'" style="font-size:9px">'+esc(a.type||'')+(act?' · active':'')+'</text></g>';
+a.bands.forEach(b=>{const x1=fx(b[0]),x2=Math.max(fx(b[1]),x1+12);g+='<rect x="'+x1+'" y="'+(y+5)+'" width="'+(x2-x1)+'" height="'+(RH/2-8)+'" rx="3" fill="color-mix(in srgb,var(--warn) 45%,transparent)" stroke="var(--warn)"><title>'+esc(a.name)+': '+bandName(b[0],b[1])+', direct (no tuner)</title></rect>';});
+antOutRanges(s,a.name).forEach(r=>{const x1=fx(r.a),x2=Math.max(fx(r.b),x1+12);const lbl=r.outs.join('+');g+='<rect x="'+x1+'" y="'+(y+RH/2+1)+'" width="'+(x2-x1)+'" height="'+(RH/2-8)+'" rx="3" fill="color-mix(in srgb,var(--acc) 45%,transparent)" stroke="var(--acc)"><title>'+esc(a.name)+': '+bandName(r.a,r.b)+' via '+esc(lbl)+'</title></rect>'+'<text x="'+((x2-x1)>lbl.length*6+6?x1+3:x2+3)+'" y="'+(y+RH/2+13)+'" style="font-size:9px;fill:var(--fg);pointer-events:none">'+esc(lbl)+'</text>';});
+if(!a.bands.length&&!antOutRanges(s,a.name).length)g+='<text class="sub" x="'+(LW+8)+'" y="'+(y+RH/2+3)+'" style="font-size:10px">no ranges yet</text>';});
 if(s.freq){const x=fx(s.freq);g+='<line class="cur" x1="'+x+'" y1="'+(TOP-4)+'" x2="'+x+'" y2="'+(H-6)+'"/>';}
 m.innerHTML=g;}
-function mapDown(ev){const m=$('map');const t=ev.target;const pt=svgPt(ev);if(t.dataset.del!==undefined){cmd('rule del '+t.dataset.del);return;}
-const gr=t.closest('[data-rule]');if(gr){const ri=+gr.dataset.rule,r=S.rules[ri];drag={ri,edge:t.dataset.edge||'m',x0:pt.x,fmin:r.fmin,fmax:r.fmax,lo:Math.log10(r.fmin||1),hi:Math.log10(r.fmax||1),moved:false};m.setPointerCapture(ev.pointerId);return;}
-if(t.dataset.out&&mapAnt){const f=xf(pt.x),b=bandAt(f);const a=b?b[1]*1000:Math.round(f*0.97),c=b?b[2]*1000:Math.round(f*1.03);cmd('rule add '+mapAnt+' '+t.dataset.out+' '+a+' '+c);}}
-function mapMove(ev){if(!drag)return;const pt=svgPt(ev);const dl=(pt.x-drag.x0)/(MW-LW-10)*(FHI-FLO);if(Math.abs(pt.x-drag.x0)>2)drag.moved=true;let lo=drag.lo,hi=drag.hi;if(drag.edge==='l')lo=Math.min(drag.lo+dl,hi-0.005);else if(drag.edge==='r')hi=Math.max(drag.hi+dl,lo+0.005);else{lo+=dl;hi+=dl;}
-drag.cur=[Math.round(Math.pow(10,lo)),Math.round(Math.pow(10,hi))];const g=$('map').querySelector('[data-rule="'+drag.ri+'"]');if(g){const x1=fx(drag.cur[0]),x2=Math.max(fx(drag.cur[1]),x1+6);const b=g.querySelector('.bar');b.setAttribute('x',x1);b.setAttribute('width',x2-x1);g.querySelector('[data-edge=l]').setAttribute('x',x1-4);g.querySelector('[data-edge=r]').setAttribute('x',x2-4);g.querySelector('.del').setAttribute('x',x2-9);}}
-function mapUp(ev){if(!drag)return;const d=drag;drag=null;if(d.moved&&d.cur){let a=d.cur[0],c=d.cur[1];const ba=bandAt(a),bc=bandAt(c);if(d.edge!=='m'){if(d.edge==='l'&&ba&&Math.abs(Math.log10(a)-Math.log10(ba[1]*1000))<0.012)a=ba[1]*1000;if(d.edge==='r'&&bc&&Math.abs(Math.log10(c)-Math.log10(bc[2]*1000))<0.012)c=bc[2]*1000;}cmd('rule set '+d.ri+' '+a+' '+c);}}
-$('map').addEventListener('pointerdown',mapDown);$('map').addEventListener('pointermove',mapMove);$('map').addEventListener('pointerup',mapUp);$('map').addEventListener('pointercancel',()=>{drag=null;});
 async function poll(){try{const r=await fetch('/api/status',{cache:'no-store'});render(await r.json());}catch(e){$('catpill').textContent='offline';$('catpill').className='pill';}}
 otype();dlgRender();poll();setInterval(poll,1000);if(location.search==='?newant')$('antdlg').showModal();
 </script></body></html>

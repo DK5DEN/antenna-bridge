@@ -20,7 +20,7 @@ hard-wired to a specific antenna or rig:
   antenna relays never act together. An output may appear in the rules of
   several antennas with different ranges. Antennas carry a type (efhw,
   dipole, vertical, loop, beam, wire, other) and optionally the ranges they
-  work on without a tuner (`ant band`), which the signal flow and the map
+  work on without a tuner (`ant band`), which the signal flow, matrix and map
   show ("direct, no tuner" / "needs a tuner here").
 - **Rig profiles** describe how to talk to a radio: protocol family (line
   based ASCII as Yaesu, Kenwood and Elecraft use it, or Icom CI-V), baud
@@ -164,10 +164,13 @@ defined states (relay A on, relay B off).
 
 The web UI shows the same rules three ways: the **signal flow** on the
 Antennas tab (rig → active antenna → outputs with their live state and the
-rule that decides right now), the **frequency map** (outputs as rows, rules
-as bars on a logarithmic axis with the amateur bands shaded; drag bars or
-their edges, click into a band to add a rule) and the **matrix** (ranges ×
-outputs, click a cell to cycle – / ON / OFF).
+rule that decides right now), the **matrix** (one antenna picked from a
+dropdown; rows are its ranges, columns the outputs it uses, a cell is ON
+or OFF and click toggles it) and the **map**, an overview of every
+antenna: one row each on a logarithmic axis with the amateur bands shaded,
+amber bars for the ranges it works without a tuner, blue bars for the
+ranges where its rules switch outputs on, labelled with those outputs.
+Click an antenna name there to activate it.
 
 Several rules per output are allowed. Relay and GPIO outputs are switched
 on when any of their rules covers the frequency and off otherwise. UDP and
@@ -229,7 +232,7 @@ Port 80, single page (`firmware/src/page.h`): frequency and CAT state,
 antennas with type and activate button, outputs with live state (relay
 state, link, battery voltage, RSSI, last reply, which antennas use them),
 the signal flow (rig node opens the rig chooser, antenna nodes activate),
-antenna editor (name, type, direct ranges), the frequency map, the switching
+antenna editor (name, type, direct ranges), the antenna overview map, the switching
 matrix, output setup with Bluetooth scan and one-click add, rules per
 antenna with band presets, rig profiles with wiring notes, import,
 export and the afu.tools catalog, settings, WiFi, help and console. Extra
