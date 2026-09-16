@@ -117,8 +117,9 @@ dialog{background:var(--bg2);color:var(--fg);border:1px solid var(--line);border
 <section class="card full">
 <h2>Switching matrix</h2>
 <div class="row" id="mxants"></div>
-<p class="tag">Rows are frequency ranges, columns are the outputs. A cell shows what the output does in that range with this antenna, click toggles it. Relays and GPIO switch accordingly, UDP and line targets receive <code>freq</code> only while ON. Only the rules of the active antenna and the global ones act.</p>
+<p class="tag">Rows are frequency ranges, columns are the outputs this antenna uses — add the ones it needs below, the trash icon in a column removes the output and its rules for this antenna. A cell shows what the output does in that range with this antenna, click toggles it. Relays and GPIO switch accordingly, UDP and line targets receive <code>freq</code> only while ON. Only the rules of the active antenna and the global ones act.</p>
 <div style="overflow:auto"><table class="mx"><thead id="mxhead"></thead><tbody id="mxbody"></tbody></table></div>
+<div class="row" id="mxcolrow"></div>
 <div class="row"><label style="margin:0">Add range</label><span id="mxbands"></span><input id="mxmin" type="number" step="0.1" placeholder="from kHz" style="width:110px"><input id="mxmax" type="number" step="0.1" placeholder="to kHz" style="width:110px"><button class="acc" onclick="mxRow(v('mxmin')*1000,v('mxmax')*1000)">Add</button></div>
 </section>
 </div>
@@ -367,7 +368,9 @@ const cls=d.st==='none'?'':d.st;g+='<path class="edge '+cls+(glob?' glob':'')+'"
 if(!outs.length)g+='<text class="sub" x="'+outX+'" y="'+(midY+24)+'">'+(ant?'no outputs with rules for this antenna yet':'')+'</text>';
 m.innerHTML=g;}
 function bandSel(minId,maxId){return '<select style="width:150px" onchange="if(this.value){const p=this.value.split(\',\');$(\''+minId+'\').value=p[0];$(\''+maxId+'\').value=p[1];}"><option value="">band…</option>'+BANDS.map(b=>'<option value="'+b[1]+','+b[2]+'">'+b[0]+' ('+b[1]+'–'+b[2]+' kHz)</option>').join('')+'<option value="0,999999">always (0–999999 kHz)</option></select>';}
-let mxAnt=null;const mxExtra={};
+let mxAnt=null;const mxExtra={};const mxCols={};
+function mxColAdd(){const o=v('mxcol');if(!o)return;(mxCols[mxAnt]=mxCols[mxAnt]||new Set()).add(o);renderMatrix(S);}
+function mxColDel(out){const an=mxAnt==='-'?'':mxAnt;const idx=S.rules.map((x,i)=>[x,i]).filter(x=>x[0].ant===an&&x[0].out===out).map(x=>x[1]).sort((x,y)=>y-x);(async()=>{for(const i of idx)await cmd('rule del '+i,true);if(mxCols[mxAnt])mxCols[mxAnt].delete(out);toast(out+' removed from '+mxAnt,'ok');poll();})();}
 function mxKey(r){return r.fmin+'-'+r.fmax;}
 function mxRow(a,b){a=Math.round(a);b=Math.round(b);if(!a||!b||a>b)return;const k=mxAnt||'-';(mxExtra[k]=mxExtra[k]||{})[a+'-'+b]=[a,b];renderMatrix(S);}
 // state of an output inside a range: ON when an ON rule of that antenna (or a global one) covers
@@ -389,10 +392,12 @@ if(!mxAnt||!(mxAnt==='-'||s.ants.some(a=>a.name===mxAnt)))mxAnt=s.active||(s.ant
 $('mxants').innerHTML=s.ants.map(a=>'<span class="chip'+(a.name===mxAnt?' on':'')+(a.name===s.active?' act':'')+'" onclick="mxAnt=\''+a.name+'\';renderMatrix(S)">'+esc(a.name)+'</span>').join('')+'<span class="chip'+(mxAnt==='-'?' on':'')+'" onclick="mxAnt=\'-\';renderMatrix(S)">global</span>';
 const ant=mxAnt==='-'?'':mxAnt;const rows={};s.rules.filter(r=>r.ant===ant).forEach(r=>{rows[mxKey(r)]=[r.fmin,r.fmax];});Object.assign(rows,mxExtra[mxAnt]||{});
 const keys=Object.keys(rows).sort((x,y)=>rows[x][0]-rows[y][0]);
-$('mxhead').innerHTML='<tr><th class="f">range</th>'+s.outs.map(o=>'<th>'+esc(o.name)+'<br><span class="tag" style="font-size:10px">'+o.type+'</span></th>').join('')+'<th></th></tr>';
+const cols=s.outs.filter(o=>s.rules.some(r=>r.ant===ant&&r.out===o.name)||(mxCols[mxAnt]&&mxCols[mxAnt].has(o.name)));const free=s.outs.filter(o=>!cols.includes(o));
+$('mxhead').innerHTML='<tr><th class="f">range</th>'+cols.map(o=>'<th>'+esc(o.name)+' <button class="ico weg" style="width:22px;height:22px;vertical-align:middle" title="Remove '+esc(o.name)+' from this antenna (its rules here go with it)" onclick="if(confirm(\'Remove '+esc(o.name)+' from '+esc(mxAnt)+' and delete its rules here?\'))mxColDel(\''+esc(o.name)+'\')">'+ICO_WEG+'</button><br><span class="tag" style="font-size:10px">'+o.type+'</span></th>').join('')+'<th></th></tr>';
+const mc=$('mxcolrow');const fk=mxAnt+'|'+free.map(o=>o.name).join(',');if(mc.dataset.k!==fk){mc.dataset.k=fk;mc.innerHTML=free.length?'<label style="margin:0">Add output</label><select id="mxcol" style="width:180px">'+free.map(o=>'<option value="'+esc(o.name)+'">'+esc(o.name)+' ('+o.type+')</option>').join('')+'</select><button onclick="mxColAdd()">Add</button>':(s.outs.length?'<span class="tag">all outputs are in this matrix</span>':'<span class="tag">no outputs yet (Outputs tab)</span>');}
 $('mxbody').innerHTML=keys.map(k=>{const [a,b]=rows[k];const band=BANDS.find(x=>x[1]*1000===a&&x[2]*1000===b);const cur=s.freq&&s.freq>=a&&s.freq<=b;
-return '<tr'+(cur?' class="cur"':'')+'><td class="f"><b>'+(band?band[0]:'')+'</b> '+(b>=999e6?'always':khz(a)+' – '+khz(b)+' kHz')+'</td>'+s.outs.map(o=>{const st=mxState(s,mxAnt,o.name,a,b)===1?'on':'off';
-return '<td><span class="c '+st+'" onclick="mxCell(\''+mxAnt+'\',\''+esc(o.name)+'\','+a+','+b+')">'+st.toUpperCase()+'</span></td>';}).join('')+'<td><button class="ico weg" title="Remove range" onclick="mxDelRow(\''+mxAnt+'\','+a+','+b+')">'+ICO_WEG+'</button></td></tr>';}).join('')||'<tr><td class="tag" colspan="'+(s.outs.length+2)+'">no ranges yet, add one below</td></tr>';
+return '<tr'+(cur?' class="cur"':'')+'><td class="f"><b>'+(band?band[0]:'')+'</b> '+(b>=999e6?'always':khz(a)+' – '+khz(b)+' kHz')+'</td>'+cols.map(o=>{const st=mxState(s,mxAnt,o.name,a,b)===1?'on':'off';
+return '<td><span class="c '+st+'" onclick="mxCell(\''+mxAnt+'\',\''+esc(o.name)+'\','+a+','+b+')">'+st.toUpperCase()+'</span></td>';}).join('')+'<td><button class="ico weg" title="Remove range" onclick="mxDelRow(\''+mxAnt+'\','+a+','+b+')">'+ICO_WEG+'</button></td></tr>';}).join('')||'<tr><td class="tag" colspan="'+(cols.length+2)+'">'+(cols.length?'no ranges yet, add one below':'add the outputs this antenna needs, then ranges')+'</td></tr>';
 if(!$('mxbands').innerHTML)$('mxbands').innerHTML=bandSel('mxmin','mxmax');}
 let mapAnt=null,drag=null;
 const FLO=Math.log10(1.5e6),FHI=Math.log10(5e8),MW=1000,LW=110,RH=36,TOP=26;
