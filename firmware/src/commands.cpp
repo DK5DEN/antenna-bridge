@@ -132,8 +132,8 @@ static void printHelp(Print& out) {
     out.println(F("  ant type <name> <type> | ant del <name>"));
     out.println(F("  ant select <name|->          activate an antenna; only its rules and the global ones (-) drive the outputs"));
     out.println(F("  rule list [antenna|-]        rules, optionally only those of one antenna (- = global)"));
-    out.println(F("  rule add <antenna|-> <out> <fmin> <fmax>   output is on between fmin and fmax while that antenna is active"));
-    out.println(F("  rule set <i> <fmin> <fmax> | rule del <i> | rule clear"));
+    out.println(F("  rule add <antenna|-> <out> <fmin> <fmax> [on|off]   on: output active in the range; off: forced off there (off wins)"));
+    out.println(F("  rule set <i> <fmin> <fmax> [on|off] | rule del <i> | rule clear"));
     out.println(F("  ble scan                     scan 6 s for BR1 relays and uart targets"));
     out.println(F("  ble list                     last scan result"));
     out.println(F("  ble on|off <name>            switch a relay by hand"));
@@ -231,8 +231,8 @@ static void cmdRule(String* t, int n, Print& out) {
             const Rule& r = settings.rules[i];
             const char* ant = r.ant[0] ? r.ant : "-";
             if (filt.length() && !filt.equalsIgnoreCase(ant)) continue;
-            out.printf("rule %u %s %s %lu %lu%s\n", i, ant, r.out, (unsigned long)r.fmin, (unsigned long)r.fmax,
-                       settings.ruleActive(r) ? "" : " (inactive)");
+            out.printf("rule %u %s %s %lu %lu %s%s\n", i, ant, r.out, (unsigned long)r.fmin, (unsigned long)r.fmax,
+                       r.state ? "on" : "off", settings.ruleActive(r) ? "" : " (inactive)");
             shown++;
         }
         out.printf("OK %u rules\n", shown);
@@ -241,11 +241,13 @@ static void cmdRule(String* t, int n, Print& out) {
         if (!parseFreq(t[4], a) || !parseFreq(t[5], b)) { out.println("ERR frequencies"); return; }
         if (settings.outIndex(t[3]) < 0) { out.println("ERR unknown output"); return; }
         if (t[2] != "-" && settings.antIndex(t[2]) < 0) { out.println("ERR unknown antenna"); return; }
-        if (!settings.ruleAdd(t[2], t[3], a, b)) { out.println("ERR list full (32)"); return; }
+        String st = n >= 7 ? t[6] : "on"; st.toLowerCase();
+        if (st != "on" && st != "off") { out.println("ERR state on|off"); return; }
+        if (!settings.ruleAdd(t[2], t[3], a, b, st == "on")) { out.println("ERR list full (32)"); return; }
         settings.saveRules();
         engine::applyNow();
         const Rule& r = settings.rules[settings.ruleCount - 1];
-        out.printf("OK rule %u %s %s %lu %lu\n", settings.ruleCount - 1, r.ant[0] ? r.ant : "-", r.out, (unsigned long)a, (unsigned long)b);
+        out.printf("OK rule %u %s %s %lu %lu %s\n", settings.ruleCount - 1, r.ant[0] ? r.ant : "-", r.out, (unsigned long)a, (unsigned long)b, r.state ? "on" : "off");
     } else if (sub == "set" && n >= 5) {
         long i; uint32_t a, b;
         if (!parseLong(t[2], i) || i < 0 || i >= settings.ruleCount) { out.println("ERR index"); return; }
@@ -253,9 +255,10 @@ static void cmdRule(String* t, int n, Print& out) {
         if (a > b) { uint32_t x = a; a = b; b = x; }
         settings.rules[i].fmin = a;
         settings.rules[i].fmax = b;
+        if (n >= 6) { String st = t[5]; st.toLowerCase(); if (st == "on" || st == "off") settings.rules[i].state = st == "on"; }
         settings.saveRules();
         engine::applyNow();
-        out.printf("OK rule %ld %s %s %lu %lu\n", i, settings.rules[i].ant[0] ? settings.rules[i].ant : "-", settings.rules[i].out, (unsigned long)a, (unsigned long)b);
+        out.printf("OK rule %ld %s %s %lu %lu %s\n", i, settings.rules[i].ant[0] ? settings.rules[i].ant : "-", settings.rules[i].out, (unsigned long)a, (unsigned long)b, settings.rules[i].state ? "on" : "off");
     } else if (sub == "del" && n >= 3) {
         long i;
         if (!parseLong(t[2], i) || !settings.ruleDel(i)) { out.println("ERR index"); return; }
@@ -268,7 +271,7 @@ static void cmdRule(String* t, int n, Print& out) {
         engine::applyNow();
         out.println("OK rules cleared");
     } else {
-        out.println("ERR usage: rule list [antenna|-] | rule add <antenna|-> <out> <fmin> <fmax> | rule set <i> <fmin> <fmax> | rule del <i> | rule clear");
+        out.println("ERR usage: rule list [antenna|-] | rule add <antenna|-> <out> <fmin> <fmax> [on|off] | rule set <i> <fmin> <fmax> [on|off] | rule del <i> | rule clear");
     }
 }
 

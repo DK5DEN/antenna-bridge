@@ -105,7 +105,7 @@ String statusJson() {
     j += ",\"rules\":[";
     for (uint8_t i = 0; i < s.ruleCount; i++) {
         if (i) j += ",";
-        j += "{\"ant\":" + q(s.rules[i].ant) + ",\"out\":" + q(s.rules[i].out) + ",\"fmin\":" + String(s.rules[i].fmin) + ",\"fmax\":" + String(s.rules[i].fmax) + ",\"active\":" + String(s.ruleActive(s.rules[i]) ? "true" : "false") + "}";
+        j += "{\"ant\":" + q(s.rules[i].ant) + ",\"out\":" + q(s.rules[i].out) + ",\"fmin\":" + String(s.rules[i].fmin) + ",\"fmax\":" + String(s.rules[i].fmax) + ",\"on\":" + String(s.rules[i].state ? "true" : "false") + ",\"active\":" + String(s.ruleActive(s.rules[i]) ? "true" : "false") + "}";
     }
     j += "]";
 

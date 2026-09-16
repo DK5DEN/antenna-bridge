@@ -40,16 +40,25 @@ pre{background:#0f1216;border:1px solid var(--line);border-radius:7px;padding:8p
 .out{border:1px solid var(--line);border-radius:8px;padding:8px 10px;margin:6px 0;display:flex;gap:10px;align-items:center;flex-wrap:wrap}
 .out .n{font-weight:600;min-width:90px}.out .t{font-size:11px;color:var(--mut);text-transform:uppercase}.out .st{min-width:60px}
 .dot{display:inline-block;width:10px;height:10px;border-radius:50%;background:var(--line);margin-right:6px;vertical-align:middle}.dot.on{background:var(--ok)}.dot.off{background:#555}.dot.bad{background:var(--err)}
+#flow{width:100%;display:block}#flow text{font:12px system-ui,sans-serif;fill:var(--fg)}#flow .sub{font-size:10px;fill:var(--mut)}#flow .node{fill:#2a3139;stroke:#3a424c;stroke-width:1}#flow .node.act{stroke:var(--ok);stroke-width:2}#flow .node.dim{opacity:.5}#flow .node.click{cursor:pointer}#flow .edge{fill:none;stroke:#3a424c;stroke-width:2}#flow .edge.on{stroke:var(--ok)}#flow .edge.off{stroke:var(--err)}#flow .edge.glob{stroke-dasharray:5 4}#flow .lbl{font-size:10px;fill:var(--mut)}#flow .lbl.on{fill:var(--ok)}#flow .lbl.off{fill:var(--err)}
+.mx{font-size:13px}.mx td,.mx th{text-align:center;padding:4px 6px}.mx td.f,.mx th.f{text-align:left;white-space:nowrap}.mx .c{cursor:pointer;border-radius:6px;padding:6px 4px;min-width:44px;display:inline-block;background:#0f1216;color:var(--mut)}.mx .c.on{background:var(--ok);color:#000;font-weight:600}.mx .c.off{background:var(--err);color:#000;font-weight:600}.mx tr.cur td{background:#4da3ff14}
+#map .bar.off{fill:#f06a5a99;stroke:#f06a5a}
 .chip{display:inline-block;padding:5px 12px;border-radius:14px;border:1px solid var(--line);background:#2a3139;cursor:pointer;font-size:13px;margin:2px}.chip.on{background:var(--acc);color:#000;border-color:var(--acc)}.chip.act{box-shadow:0 0 0 2px var(--ok)}
 #map{width:100%;touch-action:none;user-select:none;display:block}#map text{font:11px system-ui,sans-serif;fill:var(--mut)}#map .band{fill:#ffffff08}#map .bandl{fill:var(--mut);font-size:10px}#map .row{fill:#ffffff05}#map .rowl{fill:var(--fg);font-size:12px}
 #map .bar{fill:#4da3ff99;stroke:#4da3ff;stroke-width:1;cursor:grab}#map .bar.inact{fill:#8b95a355;stroke:#8b95a3}#map .bar.hit{fill:#3ec97acc;stroke:#3ec97a}#map .hnd{fill:#ffffff00;cursor:ew-resize}#map .cur{stroke:var(--err);stroke-width:1.5}#map .del{fill:var(--err);font-size:11px;cursor:pointer}
 </style></head><body>
 <header><h1>antenna-bridge</h1><span id="catpill" class="pill">…</span><span class="spacer"></span><div id="net">–</div></header>
-<nav><a href="#ant" data-v="ant">Antennas</a><a href="#map" data-v="map">Map</a><a href="#outs" data-v="outs">Outputs</a><a href="#rules" data-v="rules">Rules</a><a href="#settings" data-v="settings">Settings</a><a href="#help" data-v="help">Help</a></nav>
+<nav><a href="#ant" data-v="ant">Antennas</a><a href="#map" data-v="map">Map</a><a href="#matrix" data-v="matrix">Matrix</a><a href="#outs" data-v="outs">Outputs</a><a href="#rules" data-v="rules">Rules</a><a href="#settings" data-v="settings">Settings</a><a href="#help" data-v="help">Help</a></nav>
 <main>
 
 <!-- ===== Antennas ===== -->
 <div class="view" id="v-ant">
+<section class="card full">
+<h2>Signal flow</h2>
+<svg id="flow" viewBox="0 0 1000 120"></svg>
+<p class="tag">Live picture: the rig reports the frequency, the active antenna's rules (and the global ones, dashed) decide the outputs. Green = on, red = forced off by an OFF rule, grey = no rule for this frequency. Click an antenna to activate it. Edit the rules on the Map, Matrix or Rules tab.</p>
+</section>
+
 <section class="card">
 <h2>Frequency</h2>
 <div class="big">
@@ -86,6 +95,17 @@ pre{background:#0f1216;border:1px solid var(--line);border-radius:7px;padding:8p
 </section>
 </div>
 
+<!-- ===== Matrix ===== -->
+<div class="view" id="v-matrix">
+<section class="card full">
+<h2>Switching matrix</h2>
+<div class="row" id="mxants"></div>
+<p class="tag">Rows are frequency ranges, columns are the outputs. Click a cell: <b>–</b> (no rule) → <b class="ok">ON</b> → <b class="bad">OFF</b> → –. ON means the output is active in that range, OFF forces it off even if a wider ON rule covers the frequency. Relays and GPIO switch accordingly, UDP and line targets receive <code>freq</code> only while ON. Only the rules of the active antenna and the global ones act.</p>
+<div style="overflow:auto"><table class="mx"><thead id="mxhead"></thead><tbody id="mxbody"></tbody></table></div>
+<div class="row" style="margin-top:8px"><span class="tag">Add range:</span><span id="mxbands"></span><input id="mxmin" type="number" step="0.1" placeholder="from kHz" style="width:110px"><input id="mxmax" type="number" step="0.1" placeholder="to kHz" style="width:110px"><button class="sm acc" onclick="mxRow(v('mxmin')*1000,v('mxmax')*1000)">Add</button></div>
+</section>
+</div>
+
 <!-- ===== Outputs ===== -->
 <div class="view" id="v-outs">
 <section class="card full">
@@ -108,7 +128,7 @@ pre{background:#0f1216;border:1px solid var(--line);border-radius:7px;padding:8p
 <div class="view" id="v-rules">
 <section class="card full">
 <h2>Rules</h2>
-<p class="tag">One card per antenna. An output is active while the frequency lies inside one of its rules and its antenna is the active one. Relays and GPIO pins switch on inside and off outside. UDP and line targets receive <code>freq &lt;hz&gt;</code> inside their rules, once per frequency change. Several rules per output are allowed; <code>0 – 999999 kHz</code> means "whenever this antenna is active".</p>
+<p class="tag">One card per antenna. An output is active while an ON rule of the active antenna (or a global one) covers the frequency and no OFF rule does — OFF wins. Relays and GPIO pins switch accordingly, UDP and line targets receive <code>freq &lt;hz&gt;</code> while active, once per frequency change. Several rules per output are allowed; <code>0 – 999999 kHz</code> means "whenever this antenna is active". The Matrix tab shows the same rules as a grid.</p>
 </section>
 <div id="rulecards" class="full" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:12px"></div>
 </div>
@@ -185,7 +205,7 @@ pre{background:#0f1216;border:1px solid var(--line);border-radius:7px;padding:8p
 <tr><td><code>status</code></td><td>one line summary</td></tr>
 <tr><td><code>freq &lt;hz&gt;</code></td><td>manual frequency, <code>apply</code> re-applies the current one</td></tr>
 <tr><td><code>out list</code> / <code>out add udp|relay|line|gpio …</code> / <code>out del &lt;name&gt;</code></td><td>outputs</td></tr>
-<tr><td><code>rule list [antenna|-]</code> / <code>rule add &lt;antenna|-&gt; &lt;out&gt; &lt;fmin&gt; &lt;fmax&gt;</code> / <code>rule del &lt;i&gt;</code> / <code>rule clear</code></td><td>rules per antenna, <code>-</code> = global</td></tr>
+<tr><td><code>rule list [antenna|-]</code> / <code>rule add &lt;antenna|-&gt; &lt;out&gt; &lt;fmin&gt; &lt;fmax&gt; [on|off]</code> / <code>rule set &lt;i&gt; &lt;fmin&gt; &lt;fmax&gt; [on|off]</code> / <code>rule del &lt;i&gt;</code> / <code>rule clear</code></td><td>rules per antenna, <code>-</code> = global, OFF wins over ON</td></tr>
 <tr><td><code>ble scan</code> / <code>ble list</code> / <code>ble on|off|refresh &lt;name&gt;</code> / <code>ble send &lt;name&gt; &lt;text&gt;</code></td><td>Bluetooth</td></tr>
 <tr><td><code>ant list</code> / <code>ant add &lt;name&gt; [type]</code> / <code>ant type &lt;name&gt; &lt;type&gt;</code> / <code>ant del &lt;name&gt;</code> / <code>ant select &lt;name|-&gt;</code></td><td>antennas; a rule belongs to an antenna, outputs are shared</td></tr>
 <tr><td><code>rig</code> / <code>rig list</code> / <code>rig set &lt;preset&gt;</code></td><td>rig preset: protocol, baud rate, wiring notes</td></tr>
@@ -231,7 +251,7 @@ return{k,title,sub,outs,active,rows};}
 function renderRules(s){const groups=[...s.ants.map(a=>({k:a.name,title:a.name+(a.type?' <span class="t" style="font-size:11px;color:var(--mut)">'+esc(a.type)+'</span>':''),sub:a.name===s.active?'<span class="ok">active</span>':'<span class="tag">inactive</span>',ant:a.name})),{k:'-',title:'Global',sub:'<span class="tag">every antenna</span>',ant:''}];
 const keep={};document.querySelectorAll('#rulecards select,#rulecards input').forEach(e=>keep[e.id]=e.value);const allOuts=s.outs.map(o=>o.name);
 $('rulecards').innerHTML=groups.map(g=>{const rows=s.rules.map((r,i)=>[r,i]).filter(x=>x[0].ant===g.ant);
-return '<section class="card"><h2>'+g.title+' '+g.sub+'</h2><table><thead><tr><th>output</th><th class="r">from kHz</th><th class="r">to kHz</th><th></th></tr></thead><tbody>'+(rows.map(x=>'<tr><td>'+esc(x[0].out)+'</td><td class="r">'+khz(x[0].fmin)+'</td><td class="r">'+khz(x[0].fmax)+'</td><td class="r"><button class="sm err" onclick="cmd(\'rule del '+x[1]+'\')">✕</button></td></tr>').join('')||'<tr><td class="tag" colspan="4">no rules</td></tr>')+'</tbody></table>'
+return '<section class="card"><h2>'+g.title+' '+g.sub+'</h2><table><thead><tr><th>output</th><th class="r">from kHz</th><th class="r">to kHz</th><th>state</th><th></th></tr></thead><tbody>'+(rows.map(x=>'<tr><td>'+esc(x[0].out)+'</td><td class="r">'+khz(x[0].fmin)+'</td><td class="r">'+khz(x[0].fmax)+'</td><td><span class="'+(x[0].on?'ok':'bad')+'" style="cursor:pointer" onclick="cmd(\'rule set '+x[1]+' '+x[0].fmin+' '+x[0].fmax+' '+(x[0].on?'off':'on')+'\')">'+(x[0].on?'ON':'OFF')+'</span></td><td class="r"><button class="sm err" onclick="cmd(\'rule del '+x[1]+'\')">✕</button></td></tr>').join('')||'<tr><td class="tag" colspan="5">no rules</td></tr>')+'</tbody></table>'
 +(allOuts.length?'<div class="row" style="margin-top:8px"><select id="rout'+g.k+'">'+allOuts.map(o=>'<option'+(keep['rout'+g.k]===o?' selected':'')+'>'+esc(o)+'</option>').join('')+'</select><input id="rmin'+g.k+'" type="number" step="0.1" placeholder="from kHz" value="'+(keep['rmin'+g.k]||'')+'"><input id="rmax'+g.k+'" type="number" step="0.1" placeholder="to kHz" value="'+(keep['rmax'+g.k]||'')+'"><button class="acc" onclick="ruleAdd(\''+g.k+'\')">Add rule</button></div>'
 +'<div class="row"><span class="tag">Bands:</span>'+BANDS.map(b=>'<button class="sm" onclick="band(\''+g.k+'\','+b[1]+','+b[2]+')">'+b[0]+'</button>').join(' ')+' <button class="sm" onclick="band(\''+g.k+'\',0,999999)">always</button></div>':'<p class="tag">add outputs first (Outputs tab)</p>')+'</section>';}).join('');}
 function saveSettings(){const keys=['catbaud','catrx','cattx','catinv','civaddr','catpoll','catvfo','settle','udpport','wifion','blehold'];(async()=>{let n=0;for(const k of keys){const nv=String(v('s_'+k));if(S&&String(S.settings[k])!==nv){await cmd('set '+k+' '+nv);n++;}}dirty.clear();if(!n)log('nothing changed');poll();})();}
@@ -263,7 +283,7 @@ $('outtip').textContent=s.blebusy?'Bluetooth operation running…':'';
 $('scanst').textContent=s.scan.running?'scanning…':(s.scan.hits.length?s.scan.hits.length+' devices':'');
 $('scan').innerHTML=s.scan.hits.map(h=>'<tr><td><code>'+h.addr+'</code></td><td>'+(h.atype?'random':'public')+'</td><td>'+esc(h.name)+'</td><td>'+(h.kind===1?'<span class="ok">BR1 relay</span>':(h.kind===2?'<span class="ok">line target</span>':'other'))+'</td><td class="r">'+h.rssi+'</td><td class="r"><button class="sm" onclick="useAddr(\''+h.addr+'\','+h.atype+','+h.kind+')">use</button></td></tr>').join('')||'<tr><td class="tag" colspan="6">no scan result</td></tr>';
 $('addrlist').innerHTML=s.scan.hits.map(h=>'<option value="'+h.addr+'">'+esc(h.name)+'</option>').join('');
-renderRules(s);if(!drag)renderMap(s);
+renderRules(s);renderMatrix(s);renderFlow(s);if(!drag)renderMap(s);
 const w=s.wifi;$('net').innerHTML=w.mode==='sta'?esc(w.ssid)+' · '+w.ip+' · '+w.rssi+' dBm':(w.mode==='ap'?'AP '+w.ap_ssid+' · '+w.ap_ip:w.mode);
 $('wifiinfo').innerHTML=(w.mode==='sta'?'Connected to <b>'+esc(w.ssid)+'</b> as '+w.ip+' ('+w.rssi+' dBm), <a href="http://'+w.hostname+'/" style="color:var(--acc)">http://'+w.hostname+'</a>':'Not connected to a network')+(w.ap?'<br>Access point <b>'+w.ap_ssid+'</b> active at '+w.ap_ip:'');
 $('apssid').textContent=w.ap_ssid;$('appass').textContent=w.ap_pass;$('host').textContent=w.hostname;$('fw').textContent=s.fw;$('uptime').textContent=fmtUp(s.uptime);$('udpp').textContent=s.settings.udpport;$('udpp2').textContent=s.settings.udpport;
@@ -280,6 +300,41 @@ const CATALOG='https://afu.tools/api/v1/antenna-bridge/rigs';
 async function rigCatalog(){const b=$('rigcat');b.hidden=false;$('rigcatinfo').textContent='loading…';try{const d=await (await fetch(CATALOG)).json();const rows=d.rigs||d.profile||[];$('rigcatrows').innerHTML=rows.map(r=>'<tr><td><b>'+esc(r.name)+'</b><br><span class="tag">'+esc(r.id)+(r.wiring?' · '+esc(r.wiring).slice(0,120):'')+'</span></td><td>'+esc(r.family)+'</td><td class="r">'+r.baud+'</td><td>'+esc(r.rufzeichen||r.author||'')+'</td><td class="r"><button class="sm acc" onclick="rigInstall(\''+esc(r.id)+'\')">install</button></td></tr>').join('')||'<tr><td class="tag" colspan="5">no profiles yet</td></tr>';$('rigcatinfo').innerHTML=rows.length+' profiles from <a href="https://afu.tools/antenna-bridge" target="_blank" style="color:var(--acc)">afu.tools/antenna-bridge</a>';}catch(e){$('rigcatinfo').textContent='catalog not reachable (internet needed in the browser): '+e;}}
 async function rigInstall(id){try{const d=await (await fetch(CATALOG+'/'+encodeURIComponent(id))).json();const doc=d.profile||d;log('> install '+id+' from afu.tools');const r=await fetch('/api/rig',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(doc)});log(await r.text());poll();}catch(e){log('ERR '+e);}}
 async function rigShare(){try{const d=await (await fetch('/api/rig?id='+encodeURIComponent(v('rigsel')))).text();window.open('https://afu.tools/antenna-bridge#teilen='+encodeURIComponent(btoa(unescape(encodeURIComponent(d)))),'_blank');}catch(e){log('ERR '+e);}}
+function decide(s,ant,out){const f=s.freq;const rs=s.rules.filter(r=>r.out===out&&(r.ant===''||r.ant===ant));const hit=f?rs.filter(r=>f>=r.fmin&&f<=r.fmax):[];const off=hit.find(r=>!r.on),on=hit.find(r=>r.on);
+return {rules:rs,st:off?'off':(on?'on':'none'),by:off||on||null};}
+function renderFlow(s){const m=$('flow');const outs=s.outs,ants=s.ants;const rows=Math.max(outs.length,ants.length,1);const RH=52;const H=40+rows*RH;m.setAttribute('viewBox','0 0 1000 '+H);
+const ant=s.active||'';let g='';
+const rigY=20+((rows*RH)-64)/2;
+g+='<rect class="node" x="10" y="'+rigY+'" width="190" height="64" rx="8"/><text x="20" y="'+(rigY+20)+'">'+esc(s.cat.rigname||s.settings.rig)+'</text><text class="sub" x="20" y="'+(rigY+36)+'">'+(s.cat.ok?'<tspan fill="#3ec97a">CAT linked</tspan>':(s.cat.rigname==='No CAT, frequency from the network'?'network':'<tspan fill="#f06a5a">no CAT link</tspan>'))+' · '+esc(s.src)+'</text><text x="20" y="'+(rigY+56)+'" style="font-size:16px;font-weight:600">'+(s.freq?khz(s.freq)+' kHz':'–')+'</text>';
+const antX=300,antW=190,outX=600,outW=390;
+ants.forEach((a,i)=>{const y=20+i*RH;const act=a.name===ant;g+='<g class="click" onclick="cmd(\'ant select '+a.name+'\')"><rect class="node'+(act?' act':' dim')+'" x="'+antX+'" y="'+y+'" width="'+antW+'" height="40" rx="8"/><text x="'+(antX+12)+'" y="'+(y+17)+'">'+esc(a.name)+'</text><text class="sub" x="'+(antX+12)+'" y="'+(y+32)+'">'+esc(a.type||'antenna')+(act?' · active':' · click to activate')+'</text></g>';
+if(act)g+='<path class="edge on" d="M200 '+(rigY+32)+' C 250 '+(rigY+32)+', 250 '+(y+20)+', '+antX+' '+(y+20)+'"/>';});
+if(!ants.length)g+='<text class="sub" x="'+antX+'" y="40">no antennas yet</text>';
+const actIdx=ants.findIndex(a=>a.name===ant);const srcY=actIdx>=0?20+actIdx*RH+20:rigY+32;const srcX=actIdx>=0?antX+antW:200;
+outs.forEach((o,i)=>{const y=20+i*RH;const d=decide(s,ant,o.name);const used=d.rules.length>0;const glob=d.by&&d.by.ant==='';
+let link='';if(o.type==='relay')link=(o.link?'linked':'no link')+(o.batt?' · '+(o.batt/100).toFixed(2)+' V':'')+' · BLE relay';else if(o.type==='line')link=(o.state===1?'connected':'not connected')+' · BLE line';else if(o.type==='udp')link=esc(o.host)+':'+o.port+' · UDP';else link='GPIO '+o.pin;
+const stTxt=d.st==='on'?'<tspan fill="#3ec97a">ON</tspan>':(d.st==='off'?'<tspan fill="#f06a5a">OFF (forced)</tspan>':'<tspan fill="#8b95a3">off</tspan>');
+const why=d.by?((d.by.fmax>=999e6?'always':khz(d.by.fmin)+'–'+khz(d.by.fmax)+' kHz')+(glob?' (global)':'')):(used?'no rule for this frequency':'no rules');
+g+='<rect class="node'+(used?'':' dim')+'" x="'+outX+'" y="'+y+'" width="'+outW+'" height="40" rx="8"/><circle cx="'+(outX+16)+'" cy="'+(y+20)+'" r="6" fill="'+(d.st==='on'?'#3ec97a':(d.st==='off'?'#f06a5a':'#555'))+'"/><text x="'+(outX+30)+'" y="'+(y+17)+'">'+esc(o.name)+' <tspan class="sub">'+o.type+'</tspan>   '+stTxt+'</text><text class="sub" x="'+(outX+30)+'" y="'+(y+32)+'">'+link+' · '+why+'</text>';
+if(used){const cls=d.st==='none'?'':d.st;const x0=glob?200:srcX,y0=glob?rigY+32:srcY;g+='<path class="edge '+cls+(glob?' glob':'')+'" d="M'+x0+' '+y0+' C '+(x0+60)+' '+y0+', '+(outX-60)+' '+(y+20)+', '+outX+' '+(y+20)+'"/>';}});
+if(!outs.length)g+='<text class="sub" x="'+outX+'" y="40">no outputs yet</text>';
+m.innerHTML=g;}
+let mxAnt=null;const mxExtra={};
+function mxKey(r){return r.fmin+'-'+r.fmax;}
+function mxRow(a,b){a=Math.round(a);b=Math.round(b);if(!a||!b||a>b)return;const k=mxAnt||'-';(mxExtra[k]=mxExtra[k]||{})[a+'-'+b]=[a,b];renderMatrix(S);}
+function mxCell(ant,out,a,b){const r=S.rules.map((x,i)=>[x,i]).find(x=>x[0].ant===(ant==='-'?'':ant)&&x[0].out===out&&x[0].fmin===a&&x[0].fmax===b);
+if(!r)cmd('rule add '+ant+' '+out+' '+a+' '+b+' on');else if(r[0].on)cmd('rule set '+r[1]+' '+a+' '+b+' off');else cmd('rule del '+r[1]);}
+function mxDelRow(ant,a,b){const idx=S.rules.map((x,i)=>[x,i]).filter(x=>x[0].ant===(ant==='-'?'':ant)&&x[0].fmin===a&&x[0].fmax===b).map(x=>x[1]).sort((x,y)=>y-x);(async()=>{for(const i of idx)await cmd('rule del '+i);const k=ant;if(mxExtra[k])delete mxExtra[k][a+'-'+b];poll();})();}
+function renderMatrix(s){if(!s.ants.length&&!s.outs.length){$('mxhead').innerHTML='';$('mxbody').innerHTML='<tr><td class="tag">add antennas and outputs first</td></tr>';$('mxants').innerHTML='';return;}
+if(!mxAnt||!(mxAnt==='-'||s.ants.some(a=>a.name===mxAnt)))mxAnt=s.active||(s.ants[0]&&s.ants[0].name)||'-';
+$('mxants').innerHTML=s.ants.map(a=>'<span class="chip'+(a.name===mxAnt?' on':'')+(a.name===s.active?' act':'')+'" onclick="mxAnt=\''+a.name+'\';renderMatrix(S)">'+esc(a.name)+'</span>').join('')+'<span class="chip'+(mxAnt==='-'?' on':'')+'" onclick="mxAnt=\'-\';renderMatrix(S)">global</span>';
+const ant=mxAnt==='-'?'':mxAnt;const rows={};s.rules.filter(r=>r.ant===ant).forEach(r=>{rows[mxKey(r)]=[r.fmin,r.fmax];});Object.assign(rows,mxExtra[mxAnt]||{});
+const keys=Object.keys(rows).sort((x,y)=>rows[x][0]-rows[y][0]);
+$('mxhead').innerHTML='<tr><th class="f">range</th>'+s.outs.map(o=>'<th>'+esc(o.name)+'<br><span class="tag" style="font-size:10px">'+o.type+'</span></th>').join('')+'<th></th></tr>';
+$('mxbody').innerHTML=keys.map(k=>{const [a,b]=rows[k];const band=BANDS.find(x=>x[1]*1000===a&&x[2]*1000===b);const cur=s.freq&&s.freq>=a&&s.freq<=b;
+return '<tr'+(cur?' class="cur"':'')+'><td class="f"><b>'+(band?band[0]:'')+'</b> '+(b>=999e6?'always':khz(a)+' – '+khz(b)+' kHz')+'</td>'+s.outs.map(o=>{const r=s.rules.find(x=>x.ant===ant&&x.out===o.name&&x.fmin===a&&x.fmax===b);const st=r?(r.on?'on':'off'):'';
+return '<td><span class="c '+st+'" onclick="mxCell(\''+mxAnt+'\',\''+esc(o.name)+'\','+a+','+b+')">'+(st?st.toUpperCase():'–')+'</span></td>';}).join('')+'<td><button class="sm err" onclick="mxDelRow(\''+mxAnt+'\','+a+','+b+')">✕</button></td></tr>';}).join('')||'<tr><td class="tag" colspan="'+(s.outs.length+2)+'">no ranges yet, add one below</td></tr>';
+$('mxbands').innerHTML=BANDS.map(b=>'<button class="sm" onclick="mxRow('+b[1]*1000+','+b[2]*1000+')">'+b[0]+'</button>').join(' ')+' <button class="sm" onclick="mxRow(0,999000000)">always</button>';}
 let mapAnt=null,drag=null;
 const FLO=Math.log10(1.5e6),FHI=Math.log10(5e8),MW=1000,LW=110,RH=36,TOP=26;
 const fx=f=>LW+(Math.min(Math.max(Math.log10(Math.max(f,1)),FLO),FHI)-FLO)/(FHI-FLO)*(MW-LW-10);
@@ -292,8 +347,8 @@ $('mapants').innerHTML=s.ants.map(a=>'<span class="chip'+(a.name===mapAnt?' on':
 const ant=mapAnt==='-'?'':mapAnt;const outs=s.outs;const H=TOP+outs.length*RH+8;const m=$('map');m.setAttribute('viewBox','0 0 1000 '+H);
 let g='';BANDS.forEach(b=>{const x1=fx(b[1]*1000),x2=fx(b[2]*1000);g+='<rect class="band" x="'+x1+'" y="'+TOP+'" width="'+Math.max(x2-x1,2)+'" height="'+(H-TOP-8)+'"/><text class="bandl" x="'+((x1+x2)/2)+'" y="'+(TOP-8)+'" text-anchor="middle">'+b[0]+'</text>';});
 outs.forEach((o,i)=>{const y=TOP+i*RH;g+='<rect class="row" x="'+LW+'" y="'+y+'" width="'+(MW-LW-10)+'" height="'+(RH-4)+'" data-out="'+esc(o.name)+'"/><text class="rowl" x="8" y="'+(y+RH/2+1)+'">'+esc(o.name)+'</text><text x="8" y="'+(y+RH/2+13)+'" style="font-size:9px">'+o.type+'</text>';
-s.rules.forEach((r,ri)=>{if(r.ant!==ant||r.out!==o.name)return;const x1=fx(r.fmin),x2=Math.max(fx(r.fmax),x1+6);const hit=s.freq&&r.active&&s.freq>=r.fmin&&s.freq<=r.fmax;
-g+='<g data-rule="'+ri+'"><rect class="bar'+(hit?' hit':(r.active?'':' inact'))+'" x="'+x1+'" y="'+(y+4)+'" width="'+(x2-x1)+'" height="'+(RH-12)+'" rx="3"/><rect class="hnd" data-edge="l" x="'+(x1-4)+'" y="'+(y+4)+'" width="8" height="'+(RH-12)+'"/><rect class="hnd" data-edge="r" x="'+(x2-4)+'" y="'+(y+4)+'" width="8" height="'+(RH-12)+'"/><text class="del" x="'+(x2-9)+'" y="'+(y+RH/2+1)+'" data-del="'+ri+'">✕</text>'+((x2-x1)>60?'<text x="'+(x1+4)+'" y="'+(y+RH/2+1)+'" style="fill:#fff;font-size:10px;pointer-events:none">'+(r.fmax>=999e6?'always':khz(r.fmin)+'–'+khz(r.fmax))+'</text>':'')+'</g>';});});
+s.rules.forEach((r,ri)=>{if(r.ant!==ant||r.out!==o.name)return;const x1=fx(r.fmin),x2=Math.max(fx(r.fmax),x1+6);const hit=s.freq&&r.active&&r.on&&s.freq>=r.fmin&&s.freq<=r.fmax;
+g+='<g data-rule="'+ri+'"><rect class="bar'+(r.on?'':' off')+(hit?' hit':(r.active?'':' inact'))+'" x="'+x1+'" y="'+(y+4)+'" width="'+(x2-x1)+'" height="'+(RH-12)+'" rx="3"/><rect class="hnd" data-edge="l" x="'+(x1-4)+'" y="'+(y+4)+'" width="8" height="'+(RH-12)+'"/><rect class="hnd" data-edge="r" x="'+(x2-4)+'" y="'+(y+4)+'" width="8" height="'+(RH-12)+'"/><text class="del" x="'+(x2-9)+'" y="'+(y+RH/2+1)+'" data-del="'+ri+'">✕</text>'+((x2-x1)>60?'<text x="'+(x1+4)+'" y="'+(y+RH/2+1)+'" style="fill:#fff;font-size:10px;pointer-events:none">'+(r.fmax>=999e6?'always':khz(r.fmin)+'–'+khz(r.fmax))+'</text>':'')+'</g>';});});
 if(s.freq){const x=fx(s.freq);g+='<line class="cur" x1="'+x+'" y1="'+(TOP-4)+'" x2="'+x+'" y2="'+(H-6)+'"/>';}
 m.innerHTML=g;}
 function mapDown(ev){const m=$('map');const t=ev.target;const pt=svgPt(ev);if(t.dataset.del!==undefined){cmd('rule del '+t.dataset.del);return;}

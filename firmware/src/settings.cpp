@@ -90,10 +90,21 @@ void Settings::load() {
     ruleCount = 0;
     len = prefs.getBytesLength("rules");
     uint8_t rv = prefs.getUChar("rv", 1);   // layout version of the rules blob
-    if (rv >= 2 && len > 0 && len % sizeof(Rule) == 0 && len <= sizeof(rules)) {
+    if (rv >= 3 && len > 0 && len % sizeof(Rule) == 0 && len <= sizeof(rules)) {
         prefs.getBytes("rules", rules, len);
         ruleCount = len / sizeof(Rule);
-    } else if (len > 0 && len % 24 == 0 && len / 24 <= RULE_MAX) {
+    } else if (rv == 2 && len > 0 && len % 40 == 0 && len / 40 <= RULE_MAX) {
+        // version 2: no state byte, every rule meant "on"
+        uint8_t buf[RULE_MAX * 40];
+        prefs.getBytes("rules", buf, len);
+        ruleCount = len / 40;
+        for (uint8_t i = 0; i < ruleCount; i++) {
+            memset(&rules[i], 0, sizeof(Rule));
+            memcpy(&rules[i], buf + i * 40, 40);
+            rules[i].state = 1;
+        }
+        migrated = true;
+    } else if (rv < 2 && len > 0 && len % 24 == 0 && len / 24 <= RULE_MAX) {
         // old layout without antenna: take it from the output it named
         uint8_t buf[RULE_MAX * 24];
         prefs.getBytes("rules", buf, len);
@@ -101,6 +112,7 @@ void Settings::load() {
         for (uint8_t i = 0; i < ruleCount; i++) {
             memset(&rules[i], 0, sizeof(Rule));
             memcpy(&rules[i], buf + i * 24, 24);
+            rules[i].state = 1;
             int oi = outIndex(rules[i].out);
             if (oi >= 0) strlcpy(rules[i].ant, outs[oi].legacyAnt, sizeof(rules[i].ant));
         }
@@ -166,7 +178,7 @@ void Settings::saveRules() {
     prefs.begin(NS, false);
     if (ruleCount == 0) prefs.remove("rules");
     else prefs.putBytes("rules", rules, ruleCount * sizeof(Rule));
-    prefs.putUChar("rv", 2);
+    prefs.putUChar("rv", 3);
     prefs.end();
 }
 
@@ -215,7 +227,7 @@ bool Settings::outDel(const String& name) {
     return true;
 }
 
-bool Settings::ruleAdd(const String& ant, const String& out, uint32_t fmin, uint32_t fmax) {
+bool Settings::ruleAdd(const String& ant, const String& out, uint32_t fmin, uint32_t fmax, bool on) {
     if (ruleCount >= RULE_MAX) return false;
     int i = outIndex(out);
     if (i < 0) return false;
@@ -228,6 +240,7 @@ bool Settings::ruleAdd(const String& ant, const String& out, uint32_t fmin, uint
     if (a >= 0) strlcpy(r.ant, ants[a].name, sizeof(r.ant));
     r.fmin = fmin;
     r.fmax = fmax;
+    r.state = on ? 1 : 0;
     return true;
 }
 
@@ -243,9 +256,13 @@ bool Settings::ruleActive(const Rule& r) const {
 }
 
 bool Settings::ruleMatch(const char* out, uint32_t hz) const {
-    for (uint8_t r = 0; r < ruleCount; r++)
-        if (ruleActive(rules[r]) && strcasecmp(rules[r].out, out) == 0 && hz >= rules[r].fmin && hz <= rules[r].fmax) return true;
-    return false;
+    bool on = false;
+    for (uint8_t r = 0; r < ruleCount; r++) {
+        if (!ruleActive(rules[r]) || strcasecmp(rules[r].out, out) != 0 || hz < rules[r].fmin || hz > rules[r].fmax) continue;
+        if (!rules[r].state) return false;   // an explicit off wins
+        on = true;
+    }
+    return on;
 }
 
 bool Settings::outUsedBy(const char* out, const char* ant) const {

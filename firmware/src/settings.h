@@ -38,6 +38,8 @@ struct Rule {
     uint32_t fmin;          // Hz, inclusive
     uint32_t fmax;          // Hz, inclusive
     char     ant[16];       // antenna this rule belongs to, empty = global (every antenna)
+    uint8_t  state;         // 1 = output on inside the range, 0 = forced off (off wins over on)
+    uint8_t  reserved[3];
 };
 
 struct Settings {
@@ -77,10 +79,10 @@ struct Settings {
     int  outIndex(const String& name) const;
     bool outAdd(const Output& o);           // add, or replace an output with the same name
     bool outDel(const String& name);        // removes the output and its rules
-    bool ruleAdd(const String& ant, const String& out, uint32_t fmin, uint32_t fmax);   // ant "-" = global
+    bool ruleAdd(const String& ant, const String& out, uint32_t fmin, uint32_t fmax, bool on = true);   // ant "-" = global
     bool ruleDel(uint8_t i);
     void ruleClear() { ruleCount = 0; }
-    bool ruleMatch(const char* out, uint32_t hz) const;     // active antenna or global rules only
+    bool ruleMatch(const char* out, uint32_t hz) const;     // on: an "on" rule of the active antenna or a global one covers hz and no "off" rule does
     bool ruleActive(const Rule& r) const;                    // rule belongs to the active antenna or is global
     bool outUsedBy(const char* out, const char* ant) const;  // any rule of that antenna names the output
 

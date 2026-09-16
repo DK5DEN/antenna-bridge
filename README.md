@@ -154,9 +154,18 @@ rule add - lpf20 14000k 14350k        # global rule: with every antenna
 ant select efhw                       # switch antennas; loop rules are now inactive
 ```
 
-The web UI has a frequency map for this: outputs as rows, rules as bars on
-a logarithmic axis with the amateur bands shaded; drag bars or their edges
-(`rule set`), click into a band to add a rule, ✕ removes one.
+A rule is ON (default) or OFF: an output is active when an ON rule of the
+active antenna or a global rule covers the frequency and no OFF rule does —
+OFF wins, so "always on, except on 15 m" is one ON rule plus one OFF rule.
+That is what makes matrices possible: for a range, several outputs in
+defined states (relay A on, relay B off).
+
+The web UI shows the same rules three ways: the **signal flow** on the
+Antennas tab (rig → active antenna → outputs with their live state and the
+rule that decides right now), the **frequency map** (outputs as rows, rules
+as bars on a logarithmic axis with the amateur bands shaded; drag bars or
+their edges, click into a band to add a rule) and the **matrix** (ranges ×
+outputs, click a cell to cycle – / ON / OFF).
 
 Several rules per output are allowed. Relay and GPIO outputs are switched
 on when any of their rules covers the frequency and off otherwise. UDP and
@@ -189,7 +198,7 @@ list.
 | `rig` / `rig list` / `rig set <id>` / `rig show [id]` / `rig import <json>` / `rig del <id>` | rig profiles |
 | `ant list` / `ant add <name> [type]` / `ant type <name> <type>` / `ant del <name>` / `ant select <name\|->` | antennas |
 | `out list` / `out add …` / `out del <name>` | outputs, see above |
-| `rule list [antenna\|-]` / `rule add <antenna\|-> <out> <fmin> <fmax>` / `rule set <i> <fmin> <fmax>` / `rule del <i>` / `rule clear` | rules, `-` = global |
+| `rule list [antenna\|-]` / `rule add <antenna\|-> <out> <fmin> <fmax> [on\|off]` / `rule set <i> <fmin> <fmax> [on\|off]` / `rule del <i>` / `rule clear` | rules, `-` = global, OFF wins |
 | `ble scan` / `ble list` | scan for BR1 relays and UART targets |
 | `ble on\|off <name>` / `ble refresh <name>` / `ble send <name> <text>` | manual Bluetooth operations |
 | `cat` / `cat FA;` / `cat 03` | CAT link status, raw CAT command (hex bytes for CI-V) |
@@ -217,8 +226,8 @@ Settings (persisted in NVS):
 Port 80, single page (`firmware/src/page.h`): frequency and CAT state,
 antennas with type and activate button, outputs with live state (relay
 state, link, battery voltage, RSSI, last reply, which antennas use them),
-the frequency map, output setup with Bluetooth scan and one-click add,
-rules per antenna with band presets, rig profiles with wiring notes, import,
+the signal flow, the frequency map, the switching matrix, output setup with
+Bluetooth scan and one-click add, rules per antenna with band presets, rig profiles with wiring notes, import,
 export and the afu.tools catalog, settings, WiFi, help and console. Extra
 endpoints: `GET /api/rig?id=…` and `POST /api/rig` for profile documents. HTTP API: `GET /api/status`, `POST /api/cmd` (`line`),
 `POST /api/wifi`, `GET /api/scan`.
