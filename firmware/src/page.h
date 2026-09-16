@@ -47,7 +47,7 @@ th{color:var(--mut);font-weight:600;font-size:.74rem;text-transform:uppercase;le
 code,pre{font:.82rem/1.5 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}code{background:var(--bg2);padding:1px 5px;border-radius:4px;border:1px solid var(--line)}
 pre{background:var(--bg2);border:1px solid var(--line);border-radius:9px;padding:8px 10px;overflow:auto;margin:6px 0}
 #log{background:var(--bg2);border:1px solid var(--line);border-radius:9px;padding:8px;height:160px;overflow:auto;font:.78rem/1.5 ui-monospace,Menlo,Consolas,monospace;white-space:pre-wrap;color:var(--mut)}
-.full{grid-column:1/-1}.wide{grid-column:span 2}@media (max-width:760px){.wide{grid-column:auto}}.tag{font-size:.8rem;color:var(--mut)}.ok{color:var(--ok)}.bad{color:var(--err)}.warnc{color:var(--warn)}p{margin:6px 0}
+#o-ble,#o-udp,#o-gpio{display:contents}.full{grid-column:1/-1}.wide{grid-column:span 2}@media (max-width:760px){.wide{grid-column:auto}}.tag{font-size:.8rem;color:var(--mut)}.ok{color:var(--ok)}.bad{color:var(--err)}.warnc{color:var(--warn)}p{margin:6px 0}
 .grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px 14px}.grid2>div{display:grid;grid-template-rows:1fr var(--h);align-items:end}.grid2 label{margin:0 0 4px;line-height:1.15}.kv{display:grid;grid-template-columns:auto 1fr;gap:2px 14px;font-size:.9rem}.kv span:nth-child(odd){color:var(--mut)}
 .out{border:1px solid var(--line);border-radius:10px;padding:10px 12px;margin:var(--gap) 0;display:flex;gap:12px;align-items:center;flex-wrap:wrap;background:var(--bg2)}.out>div:last-child{display:flex;gap:6px;align-items:center}
 .out .n{font-weight:600;min-width:90px}.out .t{font-size:.7rem;color:var(--mut);text-transform:uppercase;letter-spacing:.06em}.out .st{min-width:60px}
@@ -127,7 +127,7 @@ dialog{background:var(--bg2);color:var(--fg);border:1px solid var(--line);border
 <section class="card full">
 <h2>Add output</h2>
 <div class="row">
-<select id="otype" onchange="otype()"><option value="relay">BR1 relay (Bluetooth)</option><option value="line">Bluetooth line target (magloop-tune)</option><option value="udp">UDP target (magloop-tune)</option><option value="gpio">Local GPIO</option></select>
+<select id="otype" style="width:250px" onchange="otype()"><option value="relay">BR1 relay (Bluetooth)</option><option value="line">Bluetooth line target (magloop-tune)</option><option value="udp">UDP target (magloop-tune)</option><option value="gpio">Local GPIO</option></select>
 <input id="oname" placeholder="name" style="width:120px">
 <span id="o-ble"><input id="oaddr" placeholder="aa:bb:cc:dd:ee:ff" style="width:170px" list="addrlist"><select id="oatype" style="width:110px"><option value="1">random</option><option value="0">public</option></select></span>
 <span id="o-udp" hidden><input id="ohost" placeholder="host or ip" style="width:170px" value="magloop.local"><input id="oport" type="number" placeholder="port" value="4210" style="width:90px"></span>
@@ -144,9 +144,11 @@ dialog{background:var(--bg2);color:var(--fg);border:1px solid var(--line);border
 <div class="view" id="v-rules">
 <section class="card full">
 <h2>Rules</h2>
-<p class="tag">One card per antenna. An output is active while an ON rule of the active antenna (or a global one) covers the frequency and no OFF rule does — OFF wins. Relays and GPIO pins switch accordingly, UDP and line targets receive <code>freq &lt;hz&gt;</code> while active, once per frequency change. Several rules per output are allowed; <code>0 – 999999 kHz</code> means "whenever this antenna is active". The Matrix tab shows the same rules as a grid.</p>
+<div class="row"><label style="margin:0">Antenna</label><select id="rulesel" style="width:220px" onchange="rulesAnt=this.value;renderRules(S)"></select><span class="tag" id="rulesinfo"></span></div>
+<p class="tag">An output is active while an ON rule of the active antenna (or a global one) covers the frequency and no OFF rule does — OFF wins. Relays and GPIO pins switch accordingly, UDP and line targets receive <code>freq &lt;hz&gt;</code> while active, once per frequency change. Several rules per output are allowed; <code>0 – 999999 kHz</code> means "whenever this antenna is active". The Matrix tab shows the same rules as a grid.</p>
+<table><thead><tr><th>output</th><th class="r">from kHz</th><th class="r">to kHz</th><th>state</th><th></th></tr></thead><tbody id="rulerows"></tbody></table>
+<div class="row" id="ruleadd"></div>
 </section>
-<div id="rulecards" class="full" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:14px"></div>
 </div>
 
 <!-- ===== Settings ===== -->
@@ -264,16 +266,15 @@ function otype(){const t=v('otype');$('o-ble').hidden=!(t==='relay'||t==='line')
 function outAdd(){const t=v('otype'),n=v('oname').trim();if(!n){alert('name');return;}let c='out add '+t+' '+n+' ';
 if(t==='relay'||t==='line')c+=v('oaddr').trim()+' '+v('oatype');else if(t==='udp')c+=v('ohost').trim()+' '+v('oport');else c+=v('opin')+' '+v('oinv');cmd(c);}
 function useAddr(a,ty,k){$('oaddr').value=a;$('oatype').value=ty;$('otype').value=k===2?'line':'relay';otype();location.hash='#outs';}
-function ruleAdd(k){const o=v('rout'+k),a=v('rmin'+k),b=v('rmax'+k);if(!o||!a||!b)return;cmd('rule add '+k+' '+o+' '+Math.round(a*1000)+' '+Math.round(b*1000));}
-function band(k,a,b){$('rmin'+k).value=a;$('rmax'+k).value=b;}
-function ruleCard(k,title,sub,outs,active){const rows=s=>s.rules.map((r,i)=>[r,i]).filter(x=>outs.includes(x[0].out));
-return{k,title,sub,outs,active,rows};}
-function renderRules(s){const groups=[...s.ants.map(a=>({k:a.name,title:a.name+(a.type?' <span class="t" style="font-size:11px;color:var(--mut)">'+esc(a.type)+'</span>':''),sub:a.name===s.active?'<span class="ok">active</span>':'<span class="tag">inactive</span>',ant:a.name})),{k:'-',title:'Global',sub:'<span class="tag">every antenna</span>',ant:''}];
-const keep={};document.querySelectorAll('#rulecards select,#rulecards input').forEach(e=>keep[e.id]=e.value);const allOuts=s.outs.map(o=>o.name);
-$('rulecards').innerHTML=groups.map(g=>{const rows=s.rules.map((r,i)=>[r,i]).filter(x=>x[0].ant===g.ant);
-return '<section class="card"><h2>'+g.title+' '+g.sub+'</h2><table><thead><tr><th>output</th><th class="r">from kHz</th><th class="r">to kHz</th><th>state</th><th></th></tr></thead><tbody>'+(rows.map(x=>'<tr><td>'+esc(x[0].out)+'</td><td class="r">'+khz(x[0].fmin)+'</td><td class="r">'+khz(x[0].fmax)+'</td><td><span class="'+(x[0].on?'ok':'bad')+'" style="cursor:pointer" onclick="cmd(\'rule set '+x[1]+' '+x[0].fmin+' '+x[0].fmax+' '+(x[0].on?'off':'on')+'\')">'+(x[0].on?'ON':'OFF')+'</span></td><td class="r">'+weg('rule del '+x[1],'Remove rule')+'</td></tr>').join('')||'<tr><td class="tag" colspan="5">no rules</td></tr>')+'</tbody></table>'
-+(allOuts.length?'<div class="row"><select id="rout'+g.k+'">'+allOuts.map(o=>'<option'+(keep['rout'+g.k]===o?' selected':'')+'>'+esc(o)+'</option>').join('')+'</select><input id="rmin'+g.k+'" type="number" step="0.1" placeholder="from kHz" value="'+(keep['rmin'+g.k]||'')+'"><input id="rmax'+g.k+'" type="number" step="0.1" placeholder="to kHz" value="'+(keep['rmax'+g.k]||'')+'">'+bandSel('rmin'+g.k,'rmax'+g.k)+'<button class="acc" onclick="ruleAdd(\''+g.k+'\')">Add rule</button>'
-+'</div>':'<p class="tag">add outputs first (Outputs tab)</p>')+'</section>';}).join('');}
+let rulesAnt=null;
+function renderRules(s){if(!rulesAnt||!(rulesAnt==='-'||s.ants.some(a=>a.name===rulesAnt)))rulesAnt=s.active||(s.ants[0]&&s.ants[0].name)||'-';
+const sel=$('rulesel');const k=s.ants.map(a=>a.name).join(',');if(sel.dataset.k!==k){sel.dataset.k=k;sel.innerHTML=s.ants.map(a=>'<option value="'+esc(a.name)+'">'+esc(a.name)+(a.type?' ('+esc(a.type)+')':'')+'</option>').join('')+'<option value="-">global (every antenna)</option>';}
+if(document.activeElement!==sel)sel.value=rulesAnt;
+const ant=rulesAnt==='-'?'':rulesAnt;const rows=s.rules.map((r,i)=>[r,i]).filter(x=>x[0].ant===ant);
+$('rulesinfo').innerHTML=rulesAnt==='-'?'apply with every antenna':(rulesAnt===s.active?'<span class="ok">active antenna</span>':'inactive antenna, its rules rest');
+$('rulerows').innerHTML=rows.map(x=>'<tr><td>'+esc(x[0].out)+'</td><td class="r">'+khz(x[0].fmin)+'</td><td class="r">'+khz(x[0].fmax)+'</td><td><span class="'+(x[0].on?'ok':'bad')+'" style="cursor:pointer" onclick="cmd(\'rule set '+x[1]+' '+x[0].fmin+' '+x[0].fmax+' '+(x[0].on?'off':'on')+'\')">'+(x[0].on?'ON':'OFF')+'</span></td><td class="r">'+weg('rule del '+x[1],'Remove rule')+'</td></tr>').join('')||'<tr><td class="tag" colspan="5">no rules yet</td></tr>';
+const ra=$('ruleadd');const ok=s.outs.map(o=>o.name).join(',');if(ra.dataset.k!==ok){ra.dataset.k=ok;ra.innerHTML=s.outs.length?'<label style="margin:0">Add rule</label><select id="routx">'+s.outs.map(o=>'<option>'+esc(o.name)+'</option>').join('')+'</select>'+bandSel('rminx','rmaxx')+'<input id="rminx" type="number" step="0.1" placeholder="from kHz" style="width:110px"><input id="rmaxx" type="number" step="0.1" placeholder="to kHz" style="width:110px"><select id="rstx" style="width:90px"><option value="on">ON</option><option value="off">OFF</option></select><button class="acc" onclick="ruleAddX()">Add</button>':'<span class="tag">add outputs first (Outputs tab)</span>';}}
+function ruleAddX(){const o=v('routx'),a=v('rminx'),b=v('rmaxx');if(!o||!a||!b)return;cmd('rule add '+rulesAnt+' '+o+' '+Math.round(a*1000)+' '+Math.round(b*1000)+' '+v('rstx'));}
 function saveSettings(){const keys=['catbaud','catrx','cattx','catinv','civaddr','catpoll','catvfo','settle','udpport','wifion','blehold'];(async()=>{let n=0;for(const k of keys){const nv=String(v('s_'+k));if(S&&String(S.settings[k])!==nv){await cmd('set '+k+' '+nv);n++;}}dirty.clear();if(!n)log('nothing changed');poll();})();}
 async function wifiAdd(){const ssid=v('wssid'),pass=v('wpass');if(!ssid)return;log('> wifi add '+ssid);const r=await fetch('/api/wifi',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:new URLSearchParams({action:'add',ssid,pass})});log(await r.text());$('wpass').value='';}
 async function wifiDel(ssid){if(!confirm('Remove '+ssid+'?'))return;const r=await fetch('/api/wifi',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:new URLSearchParams({action:'del',ssid})});log(await r.text());}
