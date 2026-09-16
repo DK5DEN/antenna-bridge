@@ -352,9 +352,12 @@ g+='<text class="sub" x="'+(antX+12)+'" y="'+(midY+56)+'">'+(aObj?(outs.length+'
 g+='<path class="edge on" d="M'+(rigX+rigW)+' '+(midY+20)+' C '+(rigX+rigW+40)+' '+(midY+20)+', '+(antX-40)+' '+(midY+20)+', '+antX+' '+(midY+20)+'"/>';
 outs.forEach((o,i)=>{const y=20+i*RH;const d=decide(s,ant,o.name);const glob=d.by&&d.by.ant==='';
 let link='';if(o.type==='relay')link=(o.link?'linked':'no link')+(o.batt?' · '+(o.batt/100).toFixed(2)+' V':'')+' · BLE relay';else if(o.type==='line')link=(o.state===1?'connected':'not connected')+' · BLE line';else if(o.type==='udp')link=esc(o.host)+':'+o.port+' · UDP';else link='GPIO '+o.pin;
-const stTxt=d.st==='on'?'<tspan fill="#10b981">ON</tspan>':(d.st==='off'?'<tspan fill="#ef4444">OFF (forced)</tspan>':'<tspan fill="#8a93b3">off</tspan>');
-const why=d.by?((d.by.fmax>=999e6?'always':khz(d.by.fmin)+'–'+khz(d.by.fmax)+' kHz')+(glob?' (global)':'')):'no rule for this frequency';
-const ico=d.st==='on'?'<path d="M5 12.5l4.5 4.5L19 7.5" stroke="#10b981" stroke-width="2.4"/>':(d.st==='off'?'<circle cx="12" cy="12" r="8" stroke="#ef4444" stroke-width="2"/><path d="M6.5 6.5l11 11" stroke="#ef4444" stroke-width="2"/>':'<circle cx="12" cy="12" r="8" stroke="#8a93b3" stroke-width="1.8"/><path d="M8.5 12h7" stroke="#8a93b3" stroke-width="1.8"/>');
+// icon and label show the real state of the device; the rule only explains it
+let act=-1,pend='';if(o.type==='relay'){act=o.state;if(o.want>=0&&o.want!==o.state)pend=' → '+(o.want?'on':'off')+' pending';}else if(o.type==='line'){act=o.state===1?(o.match?1:0):-1;}else{act=o.match?1:0;}
+const forced=d.st==='off';
+const stTxt=act===1?'<tspan fill="#10b981">ON</tspan>':(act===0?(forced?'<tspan fill="#ef4444">OFF (forced)</tspan>':'<tspan fill="#8a93b3">off</tspan>'):'<tspan fill="#8a93b3">unknown</tspan>')+(pend?'<tspan fill="#f59e0b">'+pend+'</tspan>':'');
+const why=d.by?((d.by.fmax>=999e6?'always':khz(d.by.fmin)+'–'+khz(d.by.fmax)+' kHz')+(glob?' (global)':'')+(d.st==='on'?' → on':' → off')):'no rule for this frequency';
+const ico=act===1?'<path d="M5 12.5l4.5 4.5L19 7.5" stroke="#10b981" stroke-width="2.4"/>':(act===0&&forced?'<circle cx="12" cy="12" r="8" stroke="#ef4444" stroke-width="2"/><path d="M6.5 6.5l11 11" stroke="#ef4444" stroke-width="2"/>':'<circle cx="12" cy="12" r="8" stroke="#8a93b3" stroke-width="1.8"/><path d="M8.5 12h7" stroke="#8a93b3" stroke-width="1.8"/>');
 g+='<rect class="node" x="'+outX+'" y="'+y+'" width="'+outW+'" height="40" rx="8"/><g transform="translate('+(outX+8)+','+(y+9)+') scale(.9)" fill="none" stroke-linecap="round" stroke-linejoin="round">'+ico+'</g><text x="'+(outX+34)+'" y="'+(y+17)+'">'+esc(o.name)+' <tspan class="sub">'+o.type+'</tspan>   '+stTxt+'</text><text class="sub" x="'+(outX+34)+'" y="'+(y+32)+'">'+link+' · '+why+'</text>';
 const cls=d.st==='none'?'':d.st;g+='<path class="edge '+cls+(glob?' glob':'')+'" d="M'+(antX+antW)+' '+(midY+20)+' C '+(antX+antW+50)+' '+(midY+20)+', '+(outX-50)+' '+(y+20)+', '+outX+' '+(y+20)+'"/>';});
 if(!outs.length)g+='<text class="sub" x="'+outX+'" y="'+(midY+24)+'">'+(ant?'no outputs with rules for this antenna yet':'')+'</text>';
