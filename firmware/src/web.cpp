@@ -59,7 +59,7 @@ String statusJson() {
     for (uint8_t i = 0; i < s.antCount; i++) {
         const Antenna& a = s.ants[i];
         if (i) j += ",";
-        j += "{\"name\":" + q(a.name) + ",\"type\":" + q(a.type) + ",\"direct\":" + String(s.antDirect(a, f)) + ",\"bands\":[";
+        j += "{\"name\":" + q(a.name) + ",\"type\":" + q(a.type) + ",\"direct\":" + String(f ? s.antDirect(a, f) : -1) + ",\"bands\":[";
         for (uint8_t b = 0; b < a.bandCount; b++) { if (b) j += ","; j += "[" + String(a.bands[b].fmin) + "," + String(a.bands[b].fmax) + "]"; }
         j += "]}";
     }
